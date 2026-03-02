@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
         style: {
           width: 1080,
           height: 1920,
-          background: '#0d1117',
+          background: 'linear-gradient(170deg, #0d1117 0%, #0d1117 55%, #0b1d10 100%)',
           display: 'flex',
           flexDirection: 'column',
           padding: '90px 80px',
@@ -62,6 +62,19 @@ export async function GET(request: NextRequest) {
           position: 'relative',
         },
       },
+
+      // Green accent bar at top
+      React.createElement('div', {
+        style: {
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: 1080,
+          height: 6,
+          background: '#39d353',
+        },
+      }),
+
       // Top bar
       React.createElement(
         'div',
@@ -103,7 +116,15 @@ export async function GET(request: NextRequest) {
       // Commits — the hero stat
       React.createElement(
         'div',
-        { style: { display: 'flex', flexDirection: 'column', marginBottom: 64 } },
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            marginBottom: 64,
+            borderLeft: '6px solid #39d353',
+            paddingLeft: 32,
+          },
+        },
         React.createElement(
           'span',
           {
@@ -119,19 +140,29 @@ export async function GET(request: NextRequest) {
         ),
         React.createElement(
           'span',
-          { style: { color: '#7d8590', fontSize: 38, marginTop: 12, fontWeight: 400 } },
+          { style: { color: '#39d353', fontSize: 38, marginTop: 12, fontWeight: 400, opacity: 0.8 } },
           'commits this month',
         ),
       ),
 
-      // Secondary stats row
+      // Secondary stats row — stat cards
       React.createElement(
         'div',
-        { style: { display: 'flex', gap: 0, marginBottom: 72 } },
-        // PRs
+        { style: { display: 'flex', gap: 20, marginBottom: 72 } },
+        // PRs card
         React.createElement(
           'div',
-          { style: { display: 'flex', flexDirection: 'column', flex: 1 } },
+          {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              background: '#161b22',
+              border: '1px solid #30363d',
+              borderRadius: 20,
+              padding: '32px 36px',
+            },
+          },
           React.createElement(
             'span',
             { style: { fontSize: 80, fontWeight: 700, color: '#e6edf3', lineHeight: 1 } },
@@ -139,16 +170,24 @@ export async function GET(request: NextRequest) {
           ),
           React.createElement(
             'span',
-            { style: { color: '#7d8590', fontSize: 30, marginTop: 10, fontWeight: 400 } },
+            { style: { color: '#7d8590', fontSize: 28, marginTop: 10, fontWeight: 400 } },
             'pull requests',
           ),
         ),
-        // Divider
-        React.createElement('div', { style: { width: 1, background: '#21262d', marginRight: 60 } }),
-        // Repos
+        // Repos card
         React.createElement(
           'div',
-          { style: { display: 'flex', flexDirection: 'column', flex: 1 } },
+          {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              background: '#161b22',
+              border: '1px solid #30363d',
+              borderRadius: 20,
+              padding: '32px 36px',
+            },
+          },
           React.createElement(
             'span',
             { style: { fontSize: 80, fontWeight: 700, color: '#e6edf3', lineHeight: 1 } },
@@ -156,7 +195,7 @@ export async function GET(request: NextRequest) {
           ),
           React.createElement(
             'span',
-            { style: { color: '#7d8590', fontSize: 30, marginTop: 10, fontWeight: 400 } },
+            { style: { color: '#7d8590', fontSize: 28, marginTop: 10, fontWeight: 400 } },
             'repos',
           ),
         ),
@@ -169,19 +208,29 @@ export async function GET(request: NextRequest) {
       topLanguage
         ? React.createElement(
             'div',
-            { style: { display: 'flex', flexDirection: 'column', marginBottom: 56 } },
+            {
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                marginBottom: 56,
+                background: '#161b22',
+                border: '1px solid #30363d',
+                borderRadius: 20,
+                padding: '36px 40px',
+              },
+            },
             React.createElement(
               'span',
-              { style: { color: '#7d8590', fontSize: 24, letterSpacing: '4px', fontWeight: 400, marginBottom: 18 } },
+              { style: { color: '#7d8590', fontSize: 22, letterSpacing: '4px', fontWeight: 400, marginBottom: 22 } },
               'TOP LANGUAGE',
             ),
             React.createElement(
               'div',
-              { style: { display: 'flex', alignItems: 'center', gap: 22 } },
+              { style: { display: 'flex', alignItems: 'center', gap: 24 } },
               React.createElement('div', {
                 style: {
-                  width: 28,
-                  height: 28,
+                  width: 32,
+                  height: 32,
                   borderRadius: '50%',
                   background: topLanguageColor ?? '#6e7681',
                   flexShrink: 0,
@@ -189,7 +238,14 @@ export async function GET(request: NextRequest) {
               }),
               React.createElement(
                 'span',
-                { style: { fontSize: 68, fontWeight: 700, color: '#e6edf3', lineHeight: 1 } },
+                {
+                  style: {
+                    fontSize: 72,
+                    fontWeight: 700,
+                    color: topLanguageColor ?? '#e6edf3',
+                    lineHeight: 1,
+                  },
+                },
                 topLanguage,
               ),
             ),
@@ -200,10 +256,19 @@ export async function GET(request: NextRequest) {
       topRepo
         ? React.createElement(
             'div',
-            { style: { display: 'flex', flexDirection: 'column' } },
+            {
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                background: '#161b22',
+                border: '1px solid #30363d',
+                borderRadius: 20,
+                padding: '36px 40px',
+              },
+            },
             React.createElement(
               'span',
-              { style: { color: '#7d8590', fontSize: 24, letterSpacing: '4px', fontWeight: 400, marginBottom: 18 } },
+              { style: { color: '#7d8590', fontSize: 22, letterSpacing: '4px', fontWeight: 400, marginBottom: 22 } },
               'TOP REPO',
             ),
             React.createElement(

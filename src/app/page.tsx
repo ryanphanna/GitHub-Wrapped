@@ -50,7 +50,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0d1117] text-[#e6edf3] flex flex-col items-center justify-center p-6">
+    <main className="min-h-screen text-[#e6edf3] flex flex-col items-center justify-center p-6" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(57, 211, 83, 0.09) 0%, transparent 65%), #0d1117' }}>
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-10">
@@ -65,7 +65,7 @@ export default function Home() {
         </div>
 
         {/* Form */}
-        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 mb-6">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 mb-6" style={{ boxShadow: '0 0 0 1px rgba(57, 211, 83, 0.04), 0 24px 64px rgba(0,0,0,0.5)' }}>
           <div className="mb-5">
             <label className="block text-xs font-semibold text-[#7d8590] uppercase tracking-widest mb-2">
               GitHub Username
@@ -113,7 +113,10 @@ export default function Home() {
           <button
             onClick={generate}
             disabled={!username.trim() || loading}
-            className="w-full bg-[#238636] hover:bg-[#2ea043] active:bg-[#238636] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors text-sm"
+            className="w-full disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-all text-sm"
+            style={{ background: 'linear-gradient(135deg, #238636 0%, #2ea043 100%)' }}
+            onMouseEnter={(e) => { if (username.trim() && !loading) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg, #2ea043 0%, #3fb950 100%)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg, #238636 0%, #2ea043 100%)' }}
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -140,7 +143,8 @@ export default function Home() {
             <img
               src={cardUrl}
               alt="GitHub Wrapped Card"
-              className="w-full rounded-2xl shadow-2xl border border-[#30363d]"
+              className="w-full rounded-2xl border border-[#30363d]"
+              style={{ boxShadow: '0 0 60px rgba(57, 211, 83, 0.15), 0 24px 64px rgba(0,0,0,0.6)' }}
             />
             <button
               onClick={download}

@@ -30,11 +30,39 @@ export async function GET(request: NextRequest) {
   const username = searchParams.get('username')?.trim()
   const month = parseInt(searchParams.get('month') ?? '0')
   const year = parseInt(searchParams.get('year') ?? '0')
+  const theme = searchParams.get('theme') ?? 'midnight'
   const token = process.env.GITHUB_TOKEN
 
   if (!username || !month || !year || month < 1 || month > 12) {
     return NextResponse.json({ error: 'Missing or invalid parameters' }, { status: 400 })
   }
+
+  // Theme definitions
+  const themes: Record<string, { bg: string; accent: string; cardBg: string; text: string; subtext: string }> = {
+    midnight: {
+      bg: 'linear-gradient(170deg, #0d1117 0%, #0d1117 55%, #0b1d10 100%)',
+      accent: '#39d353',
+      cardBg: '#161b22',
+      text: '#e6edf3',
+      subtext: '#7d8590',
+    },
+    gold: {
+      bg: 'linear-gradient(170deg, #1a1600 0%, #2c2500 55%, #3d3300 100%)',
+      accent: '#ffd700',
+      cardBg: '#2d2600',
+      text: '#fff9e6',
+      subtext: '#b3a77d',
+    },
+    cyberpunk: {
+      bg: 'linear-gradient(170deg, #050005 0%, #150015 55%, #250025 100%)',
+      accent: '#ff00ff',
+      cardBg: '#250025',
+      text: '#ffe6ff',
+      subtext: '#b37db3',
+    },
+  }
+
+  const activeTheme = themes[theme] ?? themes.midnight
 
   try {
     const [stats, { regular, bold, extrabold }] = await Promise.all([
@@ -46,7 +74,18 @@ export async function GET(request: NextRequest) {
     // Scale font size to fit the month name — short months get HUGE text
     const monthFontSize = Math.max(100, Math.min(220, Math.floor(1050 / monthName.length)))
 
-    const { commits, pullRequests, reposContributed, topLanguage, topLanguageColor, topRepo } = stats
+    const { commits, pullRequests, reposContributed, topLanguage, topLanguageColor, topRepo, avatarUrl, name: fullName, totalStars, followers } = stats
+
+    // Fetch avatar image
+    let avatarBuffer: Buffer | null = null
+    try {
+      const avatarRes = await fetch(avatarUrl)
+      if (avatarRes.ok) {
+        avatarBuffer = Buffer.from(await avatarRes.arrayBuffer())
+      }
+    } catch (e) {
+      console.error('Failed to fetch avatar:', e)
+    }
 
     const card = React.createElement(
       'div',
@@ -54,7 +93,7 @@ export async function GET(request: NextRequest) {
         style: {
           width: 1080,
           height: 1920,
-          background: 'linear-gradient(170deg, #0d1117 0%, #0d1117 55%, #0b1d10 100%)',
+          background: activeTheme.bg,
           display: 'flex',
           flexDirection: 'column',
           padding: '90px 80px',
@@ -63,7 +102,7 @@ export async function GET(request: NextRequest) {
         },
       },
 
-      // Green accent bar at top
+      // Accent bar at top
       React.createElement('div', {
         style: {
           position: 'absolute',
@@ -71,7 +110,7 @@ export async function GET(request: NextRequest) {
           left: 0,
           width: 1080,
           height: 6,
-          background: '#39d353',
+          background: activeTheme.accent,
         },
       }),
 
@@ -79,39 +118,62 @@ export async function GET(request: NextRequest) {
       React.createElement(
         'div',
         { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-        React.createElement('span', { style: { color: '#7d8590', fontSize: 28, fontWeight: 400 } }, 'github wrapped'),
-        React.createElement('span', { style: { color: '#7d8590', fontSize: 28, fontWeight: 400 } }, String(year)),
+        React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 28, fontWeight: 400 } }, 'github wrapped'),
+        React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 28, fontWeight: 400 } }, String(year)),
       ),
 
       // Spacer
       React.createElement('div', { style: { flex: 1 } }),
 
-      // Month name (hero)
+      // User Profile Header (Hero)
       React.createElement(
         'div',
         { style: { display: 'flex', flexDirection: 'column', marginBottom: 20 } },
+        React.createElement(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: 32, marginBottom: 24 } },
+          avatarBuffer && React.createElement('img', {
+            src: `data:image/png;base64,${avatarBuffer.toString('base64')}`,
+            width: 120,
+            height: 120,
+            style: {
+              borderRadius: 60,
+              border: `4px solid ${activeTheme.accent}`,
+              opacity: 0.9,
+            }
+          } as any),
+          React.createElement(
+            'div',
+            { style: { display: 'flex', flexDirection: 'column' } },
+            fullName && React.createElement(
+              'span',
+              { style: { color: activeTheme.text, fontSize: 54, fontWeight: 700, lineHeight: 1.1 } },
+              fullName
+            ),
+            React.createElement(
+              'span',
+              { style: { color: activeTheme.subtext, fontSize: 38, fontWeight: 400, marginTop: 4 } },
+              `@${stats.username}`
+            ),
+          )
+        ),
         React.createElement(
           'span',
           {
             style: {
               fontSize: monthFontSize,
               fontWeight: 800,
-              color: '#39d353',
+              color: activeTheme.accent,
               lineHeight: 1,
               letterSpacing: '-3px',
             },
           },
           monthName,
         ),
-        React.createElement(
-          'span',
-          { style: { color: '#7d8590', fontSize: 38, fontWeight: 400, marginTop: 18 } },
-          `@${stats.username}`,
-        ),
       ),
 
       // Divider
-      React.createElement('div', { style: { height: 1, background: '#21262d', marginBottom: 56 } }),
+      React.createElement('div', { style: { height: 1, background: '#21262d', opacity: 0.3, marginBottom: 56 } }),
 
       // Commits — the hero stat
       React.createElement(
@@ -121,7 +183,7 @@ export async function GET(request: NextRequest) {
             display: 'flex',
             flexDirection: 'column',
             marginBottom: 64,
-            borderLeft: '6px solid #39d353',
+            borderLeft: `6px solid ${activeTheme.accent}`,
             paddingLeft: 32,
           },
         },
@@ -131,7 +193,7 @@ export async function GET(request: NextRequest) {
             style: {
               fontSize: 180,
               fontWeight: 800,
-              color: '#e6edf3',
+              color: activeTheme.text,
               lineHeight: 1,
               letterSpacing: '-6px',
             },
@@ -140,7 +202,7 @@ export async function GET(request: NextRequest) {
         ),
         React.createElement(
           'span',
-          { style: { color: '#39d353', fontSize: 38, marginTop: 12, fontWeight: 400, opacity: 0.8 } },
+          { style: { color: activeTheme.accent, fontSize: 38, marginTop: 12, fontWeight: 400, opacity: 0.8 } },
           'commits this month',
         ),
       ),
@@ -148,7 +210,7 @@ export async function GET(request: NextRequest) {
       // Secondary stats row — stat cards
       React.createElement(
         'div',
-        { style: { display: 'flex', gap: 20, marginBottom: 72 } },
+        { style: { display: 'flex', gap: 20, marginBottom: 20 } },
         // PRs card
         React.createElement(
           'div',
@@ -157,7 +219,7 @@ export async function GET(request: NextRequest) {
               display: 'flex',
               flexDirection: 'column',
               flex: 1,
-              background: '#161b22',
+              background: activeTheme.cardBg,
               border: '1px solid #30363d',
               borderRadius: 20,
               padding: '32px 36px',
@@ -165,12 +227,12 @@ export async function GET(request: NextRequest) {
           },
           React.createElement(
             'span',
-            { style: { fontSize: 80, fontWeight: 700, color: '#e6edf3', lineHeight: 1 } },
+            { style: { fontSize: 80, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } },
             String(pullRequests),
           ),
           React.createElement(
             'span',
-            { style: { color: '#7d8590', fontSize: 28, marginTop: 10, fontWeight: 400 } },
+            { style: { color: activeTheme.subtext, fontSize: 28, marginTop: 10, fontWeight: 400 } },
             'pull requests',
           ),
         ),
@@ -182,7 +244,7 @@ export async function GET(request: NextRequest) {
               display: 'flex',
               flexDirection: 'column',
               flex: 1,
-              background: '#161b22',
+              background: activeTheme.cardBg,
               border: '1px solid #30363d',
               borderRadius: 20,
               padding: '32px 36px',
@@ -190,93 +252,149 @@ export async function GET(request: NextRequest) {
           },
           React.createElement(
             'span',
-            { style: { fontSize: 80, fontWeight: 700, color: '#e6edf3', lineHeight: 1 } },
+            { style: { fontSize: 80, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } },
             String(reposContributed),
           ),
           React.createElement(
             'span',
-            { style: { color: '#7d8590', fontSize: 28, marginTop: 10, fontWeight: 400 } },
+            { style: { color: activeTheme.subtext, fontSize: 28, marginTop: 10, fontWeight: 400 } },
             'repos',
           ),
         ),
       ),
 
+      // New stats row: Stars & Followers
+      React.createElement(
+        'div',
+        { style: { display: 'flex', gap: 20, marginBottom: 72 } },
+        // Stars card
+        React.createElement(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              background: activeTheme.cardBg,
+              border: '1px solid #30363d',
+              borderRadius: 20,
+              padding: '32px 36px',
+            },
+          },
+          React.createElement(
+            'span',
+            { style: { fontSize: 80, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } },
+            totalStars > 999 ? `${(totalStars / 1000).toFixed(1)}k` : String(totalStars),
+          ),
+          React.createElement(
+            'span',
+            { style: { color: activeTheme.subtext, fontSize: 28, marginTop: 10, fontWeight: 400 } },
+            'total stars',
+          ),
+        ),
+        // Followers card
+        React.createElement(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              background: activeTheme.cardBg,
+              border: '1px solid #30363d',
+              borderRadius: 20,
+              padding: '32px 36px',
+            },
+          },
+          React.createElement(
+            'span',
+            { style: { fontSize: 80, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } },
+            followers > 999 ? `${(followers / 1000).toFixed(1)}k` : String(followers),
+          ),
+          React.createElement(
+            'span',
+            { style: { color: activeTheme.subtext, fontSize: 28, marginTop: 10, fontWeight: 400 } },
+            'followers',
+          ),
+        ),
+      ),
+
       // Divider
-      React.createElement('div', { style: { height: 1, background: '#21262d', marginBottom: 64 } }),
+      React.createElement('div', { style: { height: 1, background: '#21262d', opacity: 0.3, marginBottom: 64 } }),
 
       // Top Language
       topLanguage
         ? React.createElement(
-            'div',
-            {
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                marginBottom: 56,
-                background: '#161b22',
-                border: '1px solid #30363d',
-                borderRadius: 20,
-                padding: '36px 40px',
-              },
+          'div',
+          {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              marginBottom: 56,
+              background: activeTheme.cardBg,
+              border: '1px solid #30363d',
+              borderRadius: 20,
+              padding: '36px 40px',
             },
+          },
+          React.createElement(
+            'span',
+            { style: { color: activeTheme.subtext, fontSize: 22, letterSpacing: '4px', fontWeight: 400, marginBottom: 22 } },
+            'TOP LANGUAGE',
+          ),
+          React.createElement(
+            'div',
+            { style: { display: 'flex', alignItems: 'center', gap: 24 } },
+            React.createElement('div', {
+              style: {
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: topLanguageColor ?? activeTheme.accent,
+                flexShrink: 0,
+              },
+            }),
             React.createElement(
               'span',
-              { style: { color: '#7d8590', fontSize: 22, letterSpacing: '4px', fontWeight: 400, marginBottom: 22 } },
-              'TOP LANGUAGE',
-            ),
-            React.createElement(
-              'div',
-              { style: { display: 'flex', alignItems: 'center', gap: 24 } },
-              React.createElement('div', {
+              {
                 style: {
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  background: topLanguageColor ?? '#6e7681',
-                  flexShrink: 0,
+                  fontSize: 72,
+                  fontWeight: 700,
+                  color: activeTheme.text,
+                  lineHeight: 1,
                 },
-              }),
-              React.createElement(
-                'span',
-                {
-                  style: {
-                    fontSize: 72,
-                    fontWeight: 700,
-                    color: topLanguageColor ?? '#e6edf3',
-                    lineHeight: 1,
-                  },
-                },
-                topLanguage,
-              ),
+              },
+              topLanguage,
             ),
-          )
+          ),
+        )
         : null,
 
       // Top Repo
       topRepo
         ? React.createElement(
-            'div',
-            {
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                background: '#161b22',
-                border: '1px solid #30363d',
-                borderRadius: 20,
-                padding: '36px 40px',
-              },
+          'div',
+          {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              background: activeTheme.cardBg,
+              border: '1px solid #30363d',
+              borderRadius: 20,
+              padding: '36px 40px',
             },
-            React.createElement(
-              'span',
-              { style: { color: '#7d8590', fontSize: 22, letterSpacing: '4px', fontWeight: 400, marginBottom: 22 } },
-              'TOP REPO',
-            ),
-            React.createElement(
-              'span',
-              { style: { fontSize: 60, fontWeight: 700, color: '#e6edf3', lineHeight: 1 } },
-              topRepo,
-            ),
-          )
+          },
+          React.createElement(
+            'span',
+            { style: { color: activeTheme.subtext, fontSize: 22, letterSpacing: '4px', fontWeight: 400, marginBottom: 22 } },
+            'TOP REPO',
+          ),
+          React.createElement(
+            'span',
+            { style: { fontSize: 60, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } },
+            topRepo,
+          ),
+        )
         : null,
 
       // Push footer to bottom
@@ -288,12 +406,12 @@ export async function GET(request: NextRequest) {
         { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
         React.createElement(
           'span',
-          { style: { color: '#30363d', fontSize: 24, fontWeight: 400 } },
+          { style: { color: activeTheme.subtext, opacity: 0.5, fontSize: 24, fontWeight: 400 } },
           `github.com/${stats.username}`,
         ),
         React.createElement(
           'span',
-          { style: { color: '#30363d', fontSize: 24, fontWeight: 400 } },
+          { style: { color: activeTheme.subtext, opacity: 0.5, fontSize: 24, fontWeight: 400 } },
           'github wrapped',
         ),
       ),

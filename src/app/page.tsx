@@ -16,6 +16,7 @@ export default function Home() {
   const [username, setUsername] = useState('')
   const [month, setMonth] = useState(CURRENT_MONTH)
   const [year, setYear] = useState(CURRENT_YEAR)
+  const [theme, setTheme] = useState('midnight')
   const [cardUrl, setCardUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +27,7 @@ export default function Home() {
     setError(null)
     setCardUrl(null)
 
-    const url = `/api/card?username=${encodeURIComponent(username.trim())}&month=${month}&year=${year}`
+    const url = `/api/card?username=${encodeURIComponent(username.trim())}&month=${month}&year=${year}&theme=${theme}`
     try {
       const res = await fetch(url)
       if (!res.ok) {
@@ -45,13 +46,18 @@ export default function Home() {
     if (!cardUrl) return
     const a = document.createElement('a')
     a.href = cardUrl
-    a.download = `github-wrapped-${username}-${MONTHS[month - 1]}-${year}.png`
+    a.download = `github-wrapped-${username}-${MONTHS[month - 1]}-${year}-${theme}.png`
     a.click()
   }
 
+  const shareText = `Check out my GitHub Wrapped for ${MONTHS[month - 1]} ${year}! 🚀`
+  // Social share URLs - we points to the current URL, but ideally it would be the card image if hosted
+  const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(window.location.href)}`
+  const linkedinShareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`
+
   return (
     <main className="min-h-screen text-[#e6edf3] flex flex-col items-center justify-center p-6" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(57, 211, 83, 0.09) 0%, transparent 65%), #0d1117' }}>
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md my-12">
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-4">
@@ -110,6 +116,26 @@ export default function Home() {
             </div>
           </div>
 
+          <div className="mb-6">
+            <label className="block text-xs font-semibold text-[#7d8590] uppercase tracking-widest mb-3">Theme</label>
+            <div className="flex gap-3">
+              {[
+                { id: 'midnight', color: '#39d353', label: 'Midnight' },
+                { id: 'gold', color: '#ffd700', label: 'Gold' },
+                { id: 'cyberpunk', color: '#ff00ff', label: 'Cyber' },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  className={`flex-1 flex flex-col items-center gap-2 p-2 rounded-xl border-2 transition-all ${theme === t.id ? 'border-[#39d353] bg-[#39d353]/5' : 'border-transparent bg-[#0d1117] hover:border-[#30363d]'}`}
+                >
+                  <div className="w-8 h-8 rounded-full shadow-inner" style={{ background: t.color }} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
             onClick={generate}
             disabled={!username.trim() || loading}
@@ -138,7 +164,7 @@ export default function Home() {
 
         {/* Card Preview */}
         {cardUrl && (
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={cardUrl}
@@ -146,16 +172,44 @@ export default function Home() {
               className="w-full rounded-2xl border border-[#30363d]"
               style={{ boxShadow: '0 0 60px rgba(57, 211, 83, 0.15), 0 24px 64px rgba(0,0,0,0.6)' }}
             />
-            <button
-              onClick={download}
-              className="flex items-center gap-2 bg-[#161b22] border border-[#30363d] hover:border-[#39d353] hover:text-[#39d353] text-[#e6edf3] font-semibold px-8 py-3 rounded-lg transition-colors text-sm"
-            >
-              <svg height="16" viewBox="0 0 16 16" className="fill-current" aria-hidden="true">
-                <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z" />
-                <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.97a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.779a.749.749 0 1 1 1.06-1.06l1.97 1.97Z" />
-              </svg>
-              Save Image
-            </button>
+
+            <div className="flex flex-col w-full gap-3">
+              <button
+                onClick={download}
+                className="flex items-center justify-center gap-2 bg-[#39d353] hover:bg-[#47e462] text-[#0d1117] font-bold w-full py-4 rounded-xl transition-all shadow-lg active:scale-[0.98]"
+              >
+                <svg height="20" viewBox="0 0 16 16" className="fill-current" aria-hidden="true">
+                  <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z" />
+                  <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.97a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.779a.749.749 0 1 1 1.06-1.06l1.97 1.97Z" />
+                </svg>
+                Download PNG
+              </button>
+
+              <div className="grid grid-cols-2 gap-3">
+                <a
+                  href={xShareUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 bg-[#161b22] border border-[#30363d] hover:border-[#7d8590] text-white py-3 rounded-xl transition-all text-sm font-semibold"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  Share on X
+                </a>
+                <a
+                  href={linkedinShareUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 bg-[#161b22] border border-[#30363d] hover:border-[#7d8590] text-white py-3 rounded-xl transition-all text-sm font-semibold"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+                  </svg>
+                  LinkedIn
+                </a>
+              </div>
+            </div>
           </div>
         )}
       </div>

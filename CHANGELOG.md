@@ -2,13 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.2.0] - 2026-03-03
 
 ### Added
+- **User Profile**: Card now displays the user's avatar and full name for a personal touch.
+- **Rich Stats**: Added total star count (across top 100 repos) and follower count to the card.
+- **Theming**: Integrated theme support with three selectable styles: Midnight, Gold, and Cyberpunk.
+- **Social Sharing**: One-click sharing buttons for X (Twitter) and LinkedIn.
 
 ### Changed
-
-### Fixed
+- **Card Layout**: Reorganized stat cards to accommodate new data points gracefully.
+- **Download Filename**: Filenames for downloaded cards are now theme-aware.
 
 ## [1.1.0] - 2026-03-02
 

@@ -12,6 +12,8 @@ export interface MonthlyStats {
   topLanguage: string | null
   topLanguageColor: string | null
   topRepo: string | null
+  followers: number
+  totalStars: number
 }
 
 function dateRange(month: number, year: number) {
@@ -55,7 +57,7 @@ export async function fetchMonthlyStats(
   }
   if (token) commitSearchHeaders['Authorization'] = `Bearer ${token}`
 
-  const [commitsRes, prsRes, commitsDetailRes] = await Promise.all([
+  const [commitsRes, prsRes, commitsDetailRes, reposRes] = await Promise.all([
     fetch(
       `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=1`,
       { headers: commitSearchHeaders }
@@ -68,20 +70,24 @@ export async function fetchMonthlyStats(
       `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=30&sort=author-date&order=desc`,
       { headers: commitSearchHeaders }
     ),
+    ghFetch(`${GITHUB_API}/users/${username}/repos?per_page=100&sort=updated`, token)
   ])
 
-  const [commitsData, prsData, commitsDetail] = await Promise.all([
+  const [commitsDataBody, prsDataBody, commitsDetailBody, reposData] = await Promise.all([
     commitsRes.json(),
     prsRes.json(),
     commitsDetailRes.json(),
+    reposRes.ok ? reposRes.json() : []
   ])
 
-  const commits: number = commitsData.total_count ?? 0
-  const pullRequests: number = prsData.total_count ?? 0
+  const commits: number = commitsDataBody.total_count ?? 0
+  const pullRequests: number = prsDataBody.total_count ?? 0
+  const followers: number = user.followers ?? 0
+  const totalStars: number = (reposData as any[]).reduce((acc, repo) => acc + (repo.stargazers_count ?? 0), 0)
 
   // Tally commits per repo from search results
   const repoCommits: Record<string, { count: number; fullName: string }> = {}
-  for (const item of commitsDetail.items ?? []) {
+  for (const item of (commitsDetailBody.items ?? [])) {
     const name: string = item.repository?.name
     const fullName: string = item.repository?.full_name
     if (name && fullName) {
@@ -123,6 +129,8 @@ export async function fetchMonthlyStats(
     topLanguage,
     topLanguageColor,
     topRepo,
+    followers,
+    totalStars,
   }
 }
 

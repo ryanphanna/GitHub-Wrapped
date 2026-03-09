@@ -24,5 +24,6 @@ GitHub shows you a yearly contribution graph, but there's no way to celebrate or
 ---
 
 - [Changelog](./CHANGELOG.md)
+- [Roadmap](./ROADMAP.md)
 
 Created by [Ryan Hanna](https://github.com/ryanphanna) | [ryanisnota.pro](https://ryanisnota.pro)

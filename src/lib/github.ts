@@ -14,6 +14,7 @@ export interface MonthlyStats {
   topRepo: string | null
   followers: number
   totalStars: number
+  dailyCommits: number[]
 }
 
 function dateRange(month: number, year: number) {
@@ -23,14 +24,14 @@ function dateRange(month: number, year: number) {
   return { from, to }
 }
 
-async function ghFetch(url: string, token?: string) {
+async function ghFetch(url: string, token?: string, extraInit?: RequestInit) {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     'User-Agent': 'github-wrapped-app',
     'X-GitHub-Api-Version': '2022-11-28',
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
-  const res = await fetch(url, { headers })
+  const res = await fetch(url, { headers, ...extraInit })
   return res
 }
 
@@ -43,7 +44,7 @@ export async function fetchMonthlyStats(
   const { from, to } = dateRange(month, year)
 
   // Fetch user profile
-  const userRes = await ghFetch(`${GITHUB_API}/users/${username}`, token)
+  const userRes = await ghFetch(`${GITHUB_API}/users/${username}`, token, { cache: 'no-store' })
   if (!userRes.ok) {
     if (userRes.status === 404) throw new Error(`GitHub user "${username}" not found`)
     throw new Error(`GitHub API error: ${userRes.status}`)
@@ -60,17 +61,17 @@ export async function fetchMonthlyStats(
   const [commitsRes, prsRes, commitsDetailRes, reposRes] = await Promise.all([
     fetch(
       `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=1`,
-      { headers: commitSearchHeaders }
+      { headers: commitSearchHeaders, cache: 'no-store' }
     ),
     ghFetch(
       `${GITHUB_API}/search/issues?q=author:${username}+type:pr+created:${from}..${to}&per_page=1`,
       token
     ),
     fetch(
-      `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=30&sort=author-date&order=desc`,
-      { headers: commitSearchHeaders }
+      `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=100&sort=author-date&order=desc`,
+      { headers: commitSearchHeaders, cache: 'no-store' }
     ),
-    ghFetch(`${GITHUB_API}/users/${username}/repos?per_page=100&sort=updated`, token)
+    ghFetch(`${GITHUB_API}/users/${username}/repos?per_page=100&sort=updated`, token, { cache: 'no-store' })
   ])
 
   const [commitsDataBody, prsDataBody, commitsDetailBody, reposData] = await Promise.all([
@@ -83,11 +84,55 @@ export async function fetchMonthlyStats(
   const commits: number = commitsDataBody.total_count ?? 0
   const pullRequests: number = prsDataBody.total_count ?? 0
   const followers: number = user.followers ?? 0
-  const totalStars: number = (reposData as any[]).reduce((acc, repo) => acc + (repo.stargazers_count ?? 0), 0)
+  const totalStars: number = (reposData as { stargazers_count?: number }[]).reduce((acc, repo) => acc + (repo.stargazers_count ?? 0), 0)
+
+  // Calculate daily commits for the heatmap - Fetch ALL commits for the month by paginating if necessary
+  const lastDay = new Date(year, month, 0).getDate()
+  const dailyCommits = new Array(lastDay).fill(0)
+
+  // We already fetched the first page of up to 100 commits.
+  let allItems = commitsDetailBody.items ?? []
+
+  // If there are more than 100 commits, we need to fetch the rest to get an accurate heatmap
+  const totalCommits = commitsDataBody.total_count ?? 0;
+  if (totalCommits > 100) {
+    const totalPages = Math.ceil(totalCommits / 100);
+    // Fetch up to 5 pages (500 commits max) to avoid hitting rate limits too hard
+    const pagesToFetch = Math.min(totalPages, 5);
+    const fetchPromises = [];
+    for (let p = 2; p <= pagesToFetch; p++) {
+      fetchPromises.push(
+        fetch(
+          `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=100&page=${p}&sort=author-date&order=desc`,
+          { headers: commitSearchHeaders, cache: 'no-store' }
+        ).then(res => res.json())
+      );
+    }
+    const extraPages = await Promise.all(fetchPromises);
+    for (const pageBody of extraPages) {
+      if (pageBody.items) {
+        allItems = allItems.concat(pageBody.items);
+      }
+    }
+  }
+
+  for (const item of allItems) {
+    const dateStr = item.commit?.author?.date
+    if (dateStr) {
+      const d = new Date(dateStr)
+      // Check if it falls within the requested month/year
+      if (d.getMonth() + 1 === month && d.getFullYear() === year) {
+        const day = d.getDate()
+        if (day >= 1 && day <= lastDay) {
+          dailyCommits[day - 1]++
+        }
+      }
+    }
+  }
 
   // Tally commits per repo from search results
   const repoCommits: Record<string, { count: number; fullName: string }> = {}
-  for (const item of (commitsDetailBody.items ?? [])) {
+  for (const item of allItems) {
     const name: string = item.repository?.name
     const fullName: string = item.repository?.full_name
     if (name && fullName) {
@@ -106,7 +151,7 @@ export async function fetchMonthlyStats(
   let topLanguageColor: string | null = null
 
   if (topRepoFullName) {
-    const langRes = await ghFetch(`${GITHUB_API}/repos/${topRepoFullName}/languages`, token)
+    const langRes = await ghFetch(`${GITHUB_API}/repos/${topRepoFullName}/languages`, token, { cache: 'no-store' })
     if (langRes.ok) {
       const langs = await langRes.json()
       const top = Object.entries(langs).sort(([, a], [, b]) => (b as number) - (a as number))[0]
@@ -131,6 +176,7 @@ export async function fetchMonthlyStats(
     topRepo,
     followers,
     totalStars,
+    dailyCommits,
   }
 }
 

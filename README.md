@@ -9,9 +9,11 @@ GitHub shows you a yearly contribution graph, but there's no way to celebrate or
 ## Features
 
 - **Monthly Stats**: Commits, pull requests, and repos contributed — pulled live from the GitHub API.
-- **Top Language**: Detected from your most-active repository that month.
-- **Top Repo**: Surfaced automatically based on commit frequency.
+- **Heat Map**: A visual "Contribution Intensity" grid visualizing daily activity for the month.
+- **Top Language & Repo**: Automatically detected based on your activity frequency.
+- **Demo Mode**: Instant preview with a pre-generated profile to showcase functionality on load.
 - **Instant Download**: Generates a high-resolution 1080×1920 PNG card, ready to share.
+- **Social Sharing**: Native sharing support for Instagram Stories, Threads, WhatsApp, X, and LinkedIn.
 
 ## Stack
 

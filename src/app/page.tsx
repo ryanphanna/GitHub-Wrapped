@@ -10,8 +10,6 @@ const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2]
 // Only offer yearly recap for completed years
 const YEARLY_YEARS = YEARS.filter(y => y < CURRENT_YEAR)
 
-const DEMO_USER = 'ryanphanna'
-
 export default function Home() {
   const [username, setUsername] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,9 +21,7 @@ export default function Home() {
   const [step, setStep] = useState(1)
   const [copied, setCopied] = useState(false)
 
-  // Use the demo URL as the initial state to prevent flicker
-  const initialUrl = `/api/card?username=${DEMO_USER}&month=${CURRENT_MONTH}&year=${CURRENT_YEAR}&theme=daylight`
-  const [cardUrl, setCardUrl] = useState<string | null>(initialUrl)
+  const [cardUrl, setCardUrl] = useState<string | null>(null)
 
   const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/card?username=${username}&month=${month}&year=${year}&theme=${theme}` : ''
 
@@ -119,26 +115,23 @@ export default function Home() {
         {/* Left Column: Form & Header */}
         <div className="lg:col-span-5 xl:col-span-4 flex flex-col">
           {/* Header */}
-          <div className="mb-6 lg:mb-8 text-center lg:text-left">
+          <div className="mb-4 lg:mb-6 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 mb-2">
               <svg height="20" viewBox="0 0 16 16" className="fill-[#1a7f37]" aria-hidden="true">
                 <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />
               </svg>
-              <span className="text-[#1a7f37] font-bold text-base tracking-wide uppercase">GitHub Wrapped</span>
+              <span className="text-[#1a7f37] font-bold text-sm tracking-wide uppercase">GitHub Wrapped</span>
             </div>
-            <h1 className="text-3xl lg:text-4xl font-extrabold text-[#111822] mb-1 tracking-tight drop-shadow-sm leading-tight">Your month in code</h1>
-            <p className="text-[#57606a] text-sm max-w-sm">Beautiful summaries of your contributions.</p>
+            <h1 className="text-2xl lg:text-3xl font-extrabold text-[#111822] mb-1 tracking-tight drop-shadow-sm leading-tight">Your month in code</h1>
+            <p className="text-[#57606a] text-xs max-w-sm">Beautiful summaries of your contributions.</p>
           </div>
 
           {/* Form */}
-          <div className="bg-white border border-[#d0d7de] rounded-2xl p-5 lg:p-6" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.03), 0 2px 4px rgba(0,0,0,0.02)' }}>
+          <div className="bg-white border border-[#d0d7de] rounded-2xl p-4 lg:p-5" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.03), 0 2px 4px rgba(0,0,0,0.02)' }}>
             {/* Step 1: Username */}
             <div className="mb-4">
               <label className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-bold text-[#8c959f] uppercase tracking-wider">GitHub Username</span>
-                {step === 2 && (
-                  <span className="text-[9px] font-bold text-[#2da44e] uppercase bg-[#2da44e]/10 px-1.5 py-0.5 rounded">Checked</span>
-                )}
               </label>
               <div className="flex items-center bg-[#F6F8FA] border border-[#d0d7de] rounded-lg focus-within:border-[#2da44e] focus-within:ring-2 focus-within:ring-[#2da44e]/20 transition-all">
                 <span className="pl-3 text-[#57606a] font-medium select-none">@</span>
@@ -147,7 +140,7 @@ export default function Home() {
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value)
-                    if (step === 2) setStep(1) // Return to step 1 if they edit username
+                    if (step === 2) setStep(1)
                   }}
                   onKeyDown={(e) => e.key === 'Enter' && generate()}
                   placeholder="your-username"
@@ -157,8 +150,8 @@ export default function Home() {
             </div>
 
             {/* Step 2: Customization (Only shown after first submission) */}
-            <div className={`${step === 2 ? 'max-h-[1000px] opacity-100 mt-4' : 'max-h-0 opacity-0 overflow-hidden'} transition-all duration-500`}>
-              <div className="pt-2 border-t border-[#d0d7de]/50 mb-4">
+            <div className={`${step === 2 ? 'max-h-[1000px] opacity-100 mt-3' : 'max-h-0 opacity-0 overflow-hidden'} transition-all duration-500`}>
+              <div className="pt-2 border-t border-[#d0d7de]/50 mb-3">
 
                 {/* Mode toggle */}
                 <div className="mb-4">
@@ -184,20 +177,20 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className={`grid gap-3 mb-4 ${mode === 'monthly' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <div className={`grid gap-3 mb-3 ${mode === 'monthly' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   {mode === 'monthly' && (
-                  <div>
-                    <label className="block text-[10px] font-bold text-[#8c959f] uppercase tracking-wider mb-2">Month</label>
-                    <select
-                      value={month}
-                      onChange={(e) => setMonth(Number(e.target.value))}
-                      className="w-full bg-[#f6f8fa] border border-[#d0d7de] rounded-lg px-3 py-2 text-[#1F2328] font-medium focus:outline-none focus:border-[#2da44e] focus:ring-2 focus:ring-[#2da44e]/20 transition-all cursor-pointer text-sm"
-                    >
-                      {MONTHS.map((m, i) => (
-                        <option key={m} value={i + 1}>{m}</option>
-                      ))}
-                    </select>
-                  </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#8c959f] uppercase tracking-wider mb-2">Month</label>
+                      <select
+                        value={month}
+                        onChange={(e) => setMonth(Number(e.target.value))}
+                        className="w-full bg-[#f6f8fa] border border-[#d0d7de] rounded-lg px-3 py-2 text-[#1F2328] font-medium focus:outline-none focus:border-[#2da44e] focus:ring-2 focus:ring-[#2da44e]/20 transition-all cursor-pointer text-sm"
+                      >
+                        {MONTHS.map((m, i) => (
+                          <option key={m} value={i + 1}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                   <div>
                     <label className="block text-[10px] font-bold text-[#8c959f] uppercase tracking-wider mb-2">Year</label>
@@ -213,35 +206,26 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="mb-2">
-                  <label className="block text-[10px] font-bold text-[#8c959f] uppercase tracking-[0.2em] mb-4">Theme</label>
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="mb-1">
+                  <label className="block text-[10px] font-bold text-[#8c959f] uppercase tracking-[0.2em] mb-2">Theme</label>
+                  <div className="flex flex-wrap gap-3">
                     {THEMES.map((t) => (
                       <button
                         key={t.id}
                         onClick={() => setTheme(t.id)}
-                        className={`group relative flex flex-col items-start gap-4 p-4 rounded-2xl border-2 transition-all duration-300 ${theme === t.id ? 'border-[#2da44e] bg-[#2da44e]/[0.02] shadow-md translate-y-[-2px]' : 'border-[#d0d7de] bg-white hover:border-[#8c959f] shadow-sm'}`}
+                        title={t.label}
+                        className={`group relative w-10 h-10 rounded-full transition-all duration-300 shadow-sm ${theme === t.id ? 'ring-2 ring-offset-2 ring-[#2da44e] scale-110' : 'hover:scale-105 border border-black/10'}`}
+                        style={{ background: t.isDark ? t.bg : t.accent }}
                       >
-                        <div className="w-full h-14 rounded-lg relative overflow-hidden border border-black/5" style={{ background: t.bg }}>
-                          <div className={`absolute top-2 left-3 w-1/3 h-1 rounded-full ${t.isDark ? 'bg-white/10' : 'bg-black/5'}`} />
-                          <div className={`absolute top-4 left-3 w-1/4 h-2 rounded-sm ${t.isDark ? 'bg-white/5' : 'bg-black/5'}`} />
-                          <div className="absolute right-3 top-2.5 w-4 h-4 rounded-full shadow-sm" style={{ background: t.accent }} />
-                          <div className="absolute bottom-2.5 left-3 right-3 flex gap-1">
-                            {[1, 2, 3, 4, 5, 6].map(i => (
-                              <div key={i} className={`flex-1 h-3 rounded-sm ${t.isDark ? 'bg-white/5' : 'bg-black/[0.03]'}`} />
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between w-full px-0.5">
-                          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${theme === t.id ? 'text-[#24292f]' : 'text-[#8c959f]'}`}>{t.label}</span>
-                          {theme === t.id && (
-                            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2da44e] text-white shadow-sm">
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                        {theme === t.id && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-4 h-4 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-sm">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
                               </svg>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -269,7 +253,7 @@ export default function Home() {
             </button>
 
             {error && (
-              <p className="mt-4 text-[#cf222e] text-sm font-medium text-center bg-[#ffebe9] rounded-lg py-2.5 px-3 border border-[#ff8182]/50">{error}</p>
+              <p className="mt-3 text-[#cf222e] text-sm font-medium text-center bg-[#ffebe9] rounded-lg py-2 px-3 border border-[#ff8182]/50">{error}</p>
             )}
           </div>
 
@@ -303,7 +287,7 @@ export default function Home() {
 
               <button
                 onClick={copyLink}
-                className="w-full flex items-center justify-center gap-2 bg-white border border-[#d0d7de] hover:border-[#8c959f] text-[#57606a] hover:text-[#24292f] py-2 rounded-xl transition-all text-xs font-bold shadow-sm group"
+                className="w-full flex items-center justify-center gap-2 bg-white border border-[#d0d7de] hover:border-[#8c959f] text-[#57606a] hover:text-[#24292f] py-1.5 rounded-xl transition-all text-[11px] font-bold shadow-sm group"
               >
                 <div className={`transition-all duration-300 ${copied ? 'scale-110 text-green-600' : 'group-hover:rotate-12'}`}>
                   {!copied ? (
@@ -323,7 +307,7 @@ export default function Home() {
         </div>
 
         {/* Right Column: Preview & Sharing */}
-        <div className="lg:col-span-7 xl:col-span-8 flex flex-col items-center lg:sticky lg:top-4">
+        <div className="lg:col-span-7 xl:col-span-8 flex flex-col items-center lg:sticky lg:top-4 lg:pt-[104px]">
           {cardUrl ? (
             <div className="w-full flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="relative group w-full flex justify-center">
@@ -331,7 +315,7 @@ export default function Home() {
                 <img
                   src={cardUrl}
                   alt="GitHub Wrapped Card"
-                  className={`w-auto h-auto max-w-full max-h-[72vh] block rounded-[32px] border border-black/5 transition-opacity duration-300 ${loading ? 'opacity-50' : 'opacity-100'}`}
+                  className={`w-auto h-auto max-w-full max-h-[65vh] block rounded-[32px] border border-black/5 transition-opacity duration-300 ${loading ? 'opacity-50' : 'opacity-100'}`}
                   style={{ boxShadow: '0 32px 64px -16px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.02)' }}
                 />
               </div>

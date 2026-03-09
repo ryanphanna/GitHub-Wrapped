@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-03-09
+
+### Added
+- **Hover Tooltips**: Added titles to the new circular theme swatches for screen readers and desktop hover states.
+
+### Changed
+- **Circular Theme Selector**: Redesigned the theme picker to use a compact, flexible row of circular color swatches (with active ring states) instead of a 2x2 grid of wide rectangular cards.
+- **Zero-Scroll Form Optimization**: Further reduced vertical margins and padding across the configuration form to ensure the entire UI fits within a single viewport without scrolling on standard displays.
+- **Preview Alignment**: Vertically aligned the generated card preview to perfectly match the top edge of the configuration form panel for a balanced layout.
+- **Profile Pre-loading**: Removed the automatic demonstration load of `ryanphanna`. The application now starts with a clean empty state.
+
+### Removed
+- **"Checked" Badge**: Removed the unnecessary visual "Checked" badge from the username label once a profile is found.
+
 ## [1.4.1] - 2026-03-09
 
 ### Added

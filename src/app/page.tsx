@@ -1,23 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
+import { MONTHS, THEMES } from '@/lib/themes'
 
 const now = new Date()
 const CURRENT_MONTH = now.getMonth() + 1
 const CURRENT_YEAR = now.getFullYear()
 const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2]
-
-const THEMES = [
-  { id: 'daylight', color: '#2da44e', bg: 'linear-gradient(170deg, #f6f8fa 0%, #f6f8fa 55%, #e6ffec 100%)', label: 'Light', isDark: false },
-  { id: 'midnight', color: '#39d353', bg: 'linear-gradient(170deg, #0d1117 0%, #0d1117 55%, #0b1d10 100%)', label: 'Dark', isDark: true },
-  { id: 'gold', color: '#ffd700', bg: 'linear-gradient(170deg, #1a1600 0%, #2c2500 55%, #3d3300 100%)', label: 'Gold', isDark: true },
-  { id: 'cyberpunk', color: '#ff00ff', bg: 'linear-gradient(170deg, #050005 0%, #150015 55%, #250025 100%)', label: 'Cyber', isDark: true },
-]
+// Only offer yearly recap for completed years
+const YEARLY_YEARS = YEARS.filter(y => y < CURRENT_YEAR)
 
 const DEMO_USER = 'ryanphanna'
 
@@ -25,6 +16,7 @@ export default function Home() {
   const [username, setUsername] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<'monthly' | 'yearly'>('monthly')
   const [month, setMonth] = useState(CURRENT_MONTH)
   const [year, setYear] = useState(CURRENT_YEAR)
   const [theme, setTheme] = useState('daylight')
@@ -42,7 +34,9 @@ export default function Home() {
     setLoading(true)
     setError(null)
 
-    const url = `/api/card?username=${encodeURIComponent(username.trim())}&month=${month}&year=${year}&theme=${theme}&_t=${Date.now()}`
+    const url = mode === 'yearly'
+      ? `/api/card?username=${encodeURIComponent(username.trim())}&year=${year}&theme=${theme}&mode=yearly&_t=${Date.now()}`
+      : `/api/card?username=${encodeURIComponent(username.trim())}&month=${month}&year=${year}&theme=${theme}&mode=monthly&_t=${Date.now()}`
     try {
       const res = await fetch(url)
       if (!res.ok) {
@@ -70,7 +64,9 @@ export default function Home() {
     if (!cardUrl || typeof document === 'undefined') return
     const a = document.createElement('a')
     a.href = cardUrl
-    a.download = `github-wrapped-${username}-${MONTHS[month - 1]}-${year}-${theme}.png`
+    a.download = mode === 'yearly'
+      ? `github-wrapped-${username}-${year}-${theme}.png`
+      : `github-wrapped-${username}-${MONTHS[month - 1]}-${year}-${theme}.png`
     a.click()
   }
 
@@ -106,7 +102,9 @@ export default function Home() {
     }
   }
 
-  const shareText = `Check out my GitHub Wrapped for ${MONTHS[month - 1]} ${year}! 🚀`
+  const shareText = mode === 'yearly'
+    ? `Check out my GitHub Wrapped for ${year}! 🚀`
+    : `Check out my GitHub Wrapped for ${MONTHS[month - 1]} ${year}! 🚀`
   const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(baseUrl)}`
   const threadsShareUrl = `https://www.threads.net/intent/post?text=${encodeURIComponent(shareText)}%20${encodeURIComponent(baseUrl)}`
   const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}%20${encodeURIComponent(baseUrl)}`
@@ -161,15 +159,38 @@ export default function Home() {
             {/* Step 2: Customization (Only shown after first submission) */}
             <div className={`${step === 2 ? 'max-h-[1000px] opacity-100 mt-4' : 'max-h-0 opacity-0 overflow-hidden'} transition-all duration-500`}>
               <div className="pt-2 border-t border-[#d0d7de]/50 mb-4">
-                <div className="grid grid-cols-2 gap-3 mb-4">
+
+                {/* Mode toggle */}
+                <div className="mb-4">
+                  <label className="block text-[10px] font-bold text-[#8c959f] uppercase tracking-wider mb-2">Mode</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['monthly', 'yearly'] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => {
+                          setMode(m)
+                          if (m === 'yearly' && year === CURRENT_YEAR) {
+                            setYear(YEARLY_YEARS[0] ?? CURRENT_YEAR - 1)
+                          }
+                          if (m === 'monthly' && !YEARS.includes(year)) {
+                            setYear(CURRENT_YEAR)
+                          }
+                        }}
+                        className={`py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${mode === m ? 'bg-[#2da44e] border-[#2da44e] text-white' : 'bg-[#f6f8fa] border-[#d0d7de] text-[#57606a] hover:border-[#8c959f]'}`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={`grid gap-3 mb-4 ${mode === 'monthly' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {mode === 'monthly' && (
                   <div>
                     <label className="block text-[10px] font-bold text-[#8c959f] uppercase tracking-wider mb-2">Month</label>
                     <select
                       value={month}
-                      onChange={(e) => {
-                        setMonth(Number(e.target.value))
-                        // Immediate re-generate would be nice, but user specifically asked for stages
-                      }}
+                      onChange={(e) => setMonth(Number(e.target.value))}
                       className="w-full bg-[#f6f8fa] border border-[#d0d7de] rounded-lg px-3 py-2 text-[#1F2328] font-medium focus:outline-none focus:border-[#2da44e] focus:ring-2 focus:ring-[#2da44e]/20 transition-all cursor-pointer text-sm"
                     >
                       {MONTHS.map((m, i) => (
@@ -177,6 +198,7 @@ export default function Home() {
                       ))}
                     </select>
                   </div>
+                  )}
                   <div>
                     <label className="block text-[10px] font-bold text-[#8c959f] uppercase tracking-wider mb-2">Year</label>
                     <select
@@ -184,7 +206,7 @@ export default function Home() {
                       onChange={(e) => setYear(Number(e.target.value))}
                       className="w-full bg-[#f6f8fa] border border-[#d0d7de] rounded-lg px-3 py-2 text-[#1F2328] font-medium focus:outline-none focus:border-[#2da44e] focus:ring-2 focus:ring-[#2da44e]/20 transition-all cursor-pointer text-sm"
                     >
-                      {YEARS.map((y) => (
+                      {(mode === 'yearly' ? YEARLY_YEARS : YEARS).map((y) => (
                         <option key={y} value={y}>{y}</option>
                       ))}
                     </select>
@@ -203,7 +225,7 @@ export default function Home() {
                         <div className="w-full h-14 rounded-lg relative overflow-hidden border border-black/5" style={{ background: t.bg }}>
                           <div className={`absolute top-2 left-3 w-1/3 h-1 rounded-full ${t.isDark ? 'bg-white/10' : 'bg-black/5'}`} />
                           <div className={`absolute top-4 left-3 w-1/4 h-2 rounded-sm ${t.isDark ? 'bg-white/5' : 'bg-black/5'}`} />
-                          <div className="absolute right-3 top-2.5 w-4 h-4 rounded-full shadow-sm" style={{ background: t.color }} />
+                          <div className="absolute right-3 top-2.5 w-4 h-4 rounded-full shadow-sm" style={{ background: t.accent }} />
                           <div className="absolute bottom-2.5 left-3 right-3 flex gap-1">
                             {[1, 2, 3, 4, 5, 6].map(i => (
                               <div key={i} className={`flex-1 h-3 rounded-sm ${t.isDark ? 'bg-white/5' : 'bg-black/[0.03]'}`} />
@@ -242,7 +264,7 @@ export default function Home() {
                   {step === 1 ? 'Finding profile...' : 'Regenerating...'}
                 </span>
               ) : (
-                step === 1 ? 'Find My Profile' : 'Update My Wrapped'
+                step === 1 ? 'Find My Profile' : mode === 'yearly' ? 'Update My Year' : 'Update My Wrapped'
               )}
             </button>
 

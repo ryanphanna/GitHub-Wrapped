@@ -1,21 +1,9 @@
-const GITHUB_API = 'https://api.github.com'
+import { MONTHS } from '@/lib/themes'
+import type { MonthlyStats, YearlyStats } from '@/lib/types'
 
-export interface MonthlyStats {
-  username: string
-  avatarUrl: string
-  name: string
-  month: number
-  year: number
-  commits: number
-  pullRequests: number
-  reposContributed: number
-  topLanguage: string | null
-  topLanguageColor: string | null
-  topRepo: string | null
-  followers: number
-  totalStars: number
-  dailyCommits: number[]
-}
+export type { MonthlyStats, YearlyStats }
+
+const GITHUB_API = 'https://api.github.com'
 
 function dateRange(month: number, year: number) {
   const from = `${year}-${String(month).padStart(2, '0')}-01`
@@ -47,6 +35,7 @@ export async function fetchMonthlyStats(
   const userRes = await ghFetch(`${GITHUB_API}/users/${username}`, token, { cache: 'no-store' })
   if (!userRes.ok) {
     if (userRes.status === 404) throw new Error(`GitHub user "${username}" not found`)
+    if (userRes.status === 403) throw new Error('GitHub API rate limit reached — add a GitHub token to increase your limit')
     throw new Error(`GitHub API error: ${userRes.status}`)
   }
   const user = await userRes.json()
@@ -154,12 +143,16 @@ export async function fetchMonthlyStats(
     const langRes = await ghFetch(`${GITHUB_API}/repos/${topRepoFullName}/languages`, token, { cache: 'no-store' })
     if (langRes.ok) {
       const langs = await langRes.json()
-      const top = Object.entries(langs).sort(([, a], [, b]) => (b as number) - (a as number))[0]
+      const top = (Object.entries(langs) as [string, number][]).sort(([, a], [, b]) => b - a)[0]
       if (top) {
         topLanguage = top[0]
         topLanguageColor = LANGUAGE_COLORS[topLanguage] ?? '#6e7681'
       }
     }
+  }
+
+  if (commits === 0 && pullRequests === 0) {
+    throw new Error(`No GitHub activity found for ${username} in ${MONTHS[month - 1]} ${year}`)
   }
 
   return {
@@ -177,6 +170,85 @@ export async function fetchMonthlyStats(
     followers,
     totalStars,
     dailyCommits,
+  }
+}
+
+export async function fetchYearlyStats(
+  username: string,
+  year: number,
+  token?: string
+): Promise<YearlyStats> {
+  const months = await Promise.all(
+    Array.from({ length: 12 }, (_, i) =>
+      fetchMonthlyStats(username, i + 1, year, token).catch(() => null)
+    )
+  )
+
+  const validMonths = months.filter(Boolean) as MonthlyStats[]
+  if (validMonths.length === 0) throw new Error(`No data found for ${username} in ${year}`)
+
+  const first = validMonths[0]
+
+  const commits = validMonths.reduce((sum, m) => sum + m.commits, 0)
+  const pullRequests = validMonths.reduce((sum, m) => sum + m.pullRequests, 0)
+  const reposContributed = validMonths.reduce((sum, m) => sum + m.reposContributed, 0)
+
+  // Best month by commit count
+  const bestMonthIndex = validMonths.reduce(
+    (best, m, i) => (m.commits > validMonths[best].commits ? i : best),
+    0
+  )
+  const bestMonth = validMonths[bestMonthIndex].month
+  const bestMonthCommits = validMonths[bestMonthIndex].commits
+
+  // Top language — pick whichever appeared most across months
+  const langCounts: Record<string, number> = {}
+  for (const m of validMonths) {
+    if (m.topLanguage) langCounts[m.topLanguage] = (langCounts[m.topLanguage] ?? 0) + 1
+  }
+  const topLanguageEntry = Object.entries(langCounts).sort(([, a], [, b]) => b - a)[0]
+  const topLanguage = topLanguageEntry?.[0] ?? null
+  const topLanguageColor = topLanguage ? (LANGUAGE_COLORS[topLanguage] ?? '#6e7681') : null
+
+  // Top repo — pick by total commits across all months
+  const repoCounts: Record<string, number> = {}
+  for (const m of validMonths) {
+    if (m.topRepo) repoCounts[m.topRepo] = (repoCounts[m.topRepo] ?? 0) + m.commits
+  }
+  const topRepo = Object.entries(repoCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null
+
+  // Build 365-element dailyCommits array (Jan 1 = index 0)
+  const dailyCommits: number[] = []
+  for (let m = 1; m <= 12; m++) {
+    const monthStats = months[m - 1]
+    const daysInMonth = new Date(year, m, 0).getDate()
+    if (monthStats) {
+      for (let d = 0; d < daysInMonth; d++) {
+        dailyCommits.push(monthStats.dailyCommits[d] ?? 0)
+      }
+    } else {
+      for (let d = 0; d < daysInMonth; d++) {
+        dailyCommits.push(0)
+      }
+    }
+  }
+
+  return {
+    username: first.username,
+    avatarUrl: first.avatarUrl,
+    name: first.name,
+    year,
+    commits,
+    pullRequests,
+    reposContributed,
+    topLanguage,
+    topLanguageColor,
+    topRepo,
+    followers: first.followers,
+    totalStars: first.totalStars,
+    dailyCommits,
+    bestMonth,
+    bestMonthCommits,
   }
 }
 

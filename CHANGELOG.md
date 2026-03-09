@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2026-03-09
+
+### Added
+- **Typed Error Messages**: API now returns distinct, human-readable errors for three failure cases — user not found (404), rate limited (403), and no activity found for the requested period.
+
+### Changed
+- **Shared Types**: Extracted `MonthlyStats` and `YearlyStats` interfaces into `src/lib/types.ts`. `github.ts` re-exports them for backwards compatibility.
+- **Language Sort Type Safety**: Replaced unsafe `(b as number)` cast in language sort with a proper `[string, number][]` type assertion.
+
+## [1.4.0] - 2026-03-09
+
+### Added
+- **Yearly Recap**: New yearly card mode showing total annual commits, a full 52×7 contribution heatmap, best month highlight, and the standard secondary stats grid (PRs, repos, stars, followers). Only available for completed past years.
+- **Mode Toggle**: Monthly/Yearly toggle in the customization panel. Yearly mode hides the month picker and restricts the year selector to completed years only.
+- `fetchYearlyStats()` in `github.ts` — fetches all 12 months in parallel, aggregates totals, and builds a 365-element daily commits array for the full-year heatmap.
+- `YearlyStats` interface in `github.ts`.
+
+### Changed
+- Generate button label updates to "Update My Year" in yearly mode.
+- Download filename omits the month when in yearly mode.
+- Share text reflects the year rather than month+year when in yearly mode.
+
+## [1.3.1] - 2026-03-09
+
+### Changed
+- **Shared Theme Definitions**: Extracted all theme configuration (colours, gradients, heatmap palettes) into a single `src/lib/themes.ts` module. `page.tsx` and `route.tsx` now both import from this source of truth, eliminating the previously duplicated definitions.
+- **Shared Month Names**: Moved the `MONTHS` constant into `src/lib/themes.ts` alongside the theme data, removing the second copy in `route.tsx`.
+
 ## [1.3.0] - 2026-03-09
 
 ### Added

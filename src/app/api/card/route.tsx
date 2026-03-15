@@ -5,9 +5,16 @@ import { Resvg } from '@resvg/resvg-js'
 import { readFile } from 'fs/promises'
 import path from 'path'
 import { fetchMonthlyStats, fetchYearlyStats } from '@/lib/github'
-import { MONTHS, getTheme } from '@/lib/themes'
+import { MONTHS, getTheme, Theme } from '@/lib/themes'
 import React from 'react'
 
+// ─── Card dimensions ──────────────────────────────────────────────────────
+const CARD_W = 1080
+const CARD_H = 1920
+const CARD_RADIUS = 24
+const BOX_SHADOW = '0 4px 12px rgba(0,0,0,0.02)'
+
+// ─── Font cache ───────────────────────────────────────────────────────────
 let fonts: { regular: Buffer; bold: Buffer; extrabold: Buffer } | null = null
 
 async function loadFonts() {
@@ -22,6 +29,205 @@ async function loadFonts() {
   return fonts
 }
 
+// ─── Shared card element builders ─────────────────────────────────────────
+const ce = React.createElement
+
+function accentBar(t: Theme) {
+  return ce('div', { style: { position: 'absolute', top: 0, left: 0, width: CARD_W, height: 6, background: t.accent } })
+}
+
+function topBar(t: Theme, rightLabel: string) {
+  const s = { color: t.subtext, fontSize: 24, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: '4px', opacity: 0.8 }
+  return ce('div',
+    { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
+    ce('span', { style: s }, 'github wrapped'),
+    ce('span', { style: s }, rightLabel),
+  )
+}
+
+function userHeader(t: Theme, avatarBuffer: Buffer | null, fullName: string | null, username: string) {
+  return ce('div',
+    { style: { display: 'flex', flexDirection: 'column', marginBottom: 32 } },
+    ce('div',
+      { style: { display: 'flex', alignItems: 'center', gap: 24 } },
+      avatarBuffer && ce('img', {
+        src: `data:image/png;base64,${avatarBuffer.toString('base64')}`,
+        width: 140, height: 140,
+        style: { borderRadius: 70, border: `3px solid ${t.accent}`, opacity: 0.9 },
+      } as React.ImgHTMLAttributes<HTMLImageElement>),
+      ce('div',
+        { style: { display: 'flex', flexDirection: 'column' } },
+        fullName && ce('span', { style: { color: t.text, fontSize: 64, fontWeight: 700, lineHeight: 1.1 } }, fullName),
+        ce('span', { style: { color: t.subtext, fontSize: 42, fontWeight: 400, marginTop: 4 } }, `@${username}`),
+      )
+    )
+  )
+}
+
+function dividerEl(t: Theme) {
+  return ce('div', { style: { height: 1, background: t.divider, opacity: 0.5, marginBottom: 40 } })
+}
+
+function heroStat(t: Theme, value: number, label: string) {
+  return ce('div',
+    { style: { display: 'flex', flexDirection: 'column', marginBottom: 40, borderLeft: `6px solid ${t.accent}`, paddingLeft: 32 } },
+    ce('span', { style: { fontSize: 180, fontWeight: 800, color: t.text, lineHeight: 1, letterSpacing: '-6px' } }, value.toLocaleString()),
+    ce('span', { style: { color: t.accent, fontSize: 42, marginTop: 8, fontWeight: 400, opacity: 0.8 } }, label),
+  )
+}
+
+function statCard(t: Theme, value: string, label: string) {
+  return ce('div',
+    { style: { display: 'flex', flexDirection: 'column', flex: 1, background: t.cardBg, border: `1px solid ${t.divider}`, borderRadius: CARD_RADIUS, padding: '20px 24px', boxShadow: BOX_SHADOW } },
+    ce('span', { style: { fontSize: 48, fontWeight: 700, color: t.text, lineHeight: 1 } }, value),
+    ce('span', { style: { color: t.subtext, fontSize: 20, marginTop: 8 } }, label),
+  )
+}
+
+function statsGrid(t: Theme, pullRequests: number, reposContributed: number, totalStars: number, followers: number) {
+  const fmt = (n: number) => n > 999 ? `${(n / 1000).toFixed(1)}k` : String(n)
+  return ce('div',
+    { style: { display: 'flex', gap: 16, marginBottom: 48, width: '100%' } },
+    statCard(t, String(pullRequests), 'pull requests'),
+    statCard(t, String(reposContributed), 'repos'),
+    statCard(t, fmt(totalStars), 'total stars'),
+    statCard(t, fmt(followers), 'followers'),
+  )
+}
+
+function bottomRow(t: Theme, topLanguage: string | null, topLanguageColor: string | null, topRepo: string | null) {
+  const cardStyle = { display: 'flex', flexDirection: 'column' as const, background: t.cardBg, border: `1px solid ${t.divider}`, borderRadius: CARD_RADIUS, padding: '32px 36px', flex: 1, boxShadow: BOX_SHADOW }
+  const labelStyle = { color: t.subtext, fontSize: 20, letterSpacing: '2px', fontWeight: 600, marginBottom: 16 }
+
+  const langEl = topLanguage
+    ? ce('div', { style: cardStyle },
+        ce('span', { style: labelStyle }, 'TOP LANGUAGE'),
+        ce('div', { style: { display: 'flex', alignItems: 'center', gap: 16 } },
+          ce('div', { style: { width: 24, height: 24, borderRadius: '50%', background: topLanguageColor ?? t.accent, flexShrink: 0 } }),
+          ce('span', { style: { fontSize: 44, fontWeight: 700, color: t.text, lineHeight: 1 } }, topLanguage),
+        )
+      )
+    : ce('div', { style: { flex: 1 } })
+
+  const repoEl = topRepo
+    ? ce('div', { style: cardStyle },
+        ce('span', { style: labelStyle }, 'TOP REPO'),
+        ce('span', { style: { fontSize: 36, fontWeight: 700, color: t.text, lineHeight: 1.1 } }, topRepo.length > 20 ? topRepo.slice(0, 18) + '\u2026' : topRepo)
+      )
+    : ce('div', { style: { flex: 1 } })
+
+  return ce('div', { style: { display: 'flex', gap: 16, width: '100%' } }, langEl, repoEl)
+}
+
+function cardFooter(t: Theme, username: string) {
+  const s = { color: t.subtext, opacity: 0.5, fontSize: 24, fontWeight: 400 }
+  return ce('div',
+    { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+    ce('span', { style: s }, `github.com/${username}`),
+    ce('span', { style: s }, 'github wrapped'),
+  )
+}
+
+function monthlyHeatmap(t: Theme, dailyCommits: number[], year: number, month: number) {
+  const firstDay = new Date(year, month - 1, 1).getDay()
+  const daysInMonth = dailyCommits.length
+  const rows: number[][] = []
+  let row: number[] = []
+  for (let i = 0; i < firstDay; i++) row.push(-1)
+  for (let d = 1; d <= daysInMonth; d++) {
+    row.push(d)
+    if (row.length === 7) { rows.push(row); row = [] }
+  }
+  if (row.length > 0) {
+    while (row.length < 7) row.push(-1)
+    rows.push(row)
+  }
+
+  return ce('div',
+    { style: { display: 'flex', flexDirection: 'column', marginBottom: 48, background: t.cardBg, border: `1px solid ${t.divider}`, borderRadius: CARD_RADIUS, padding: '32px', alignItems: 'center', boxShadow: BOX_SHADOW } },
+    ce('div', { style: { width: '100%', display: 'flex' } },
+      ce('span', { style: { color: t.subtext, fontSize: 24, letterSpacing: '4px', fontWeight: 700, marginBottom: 36 } }, 'CONTRIBUTION INTENSITY')
+    ),
+    ce('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+      rows.map((r, ri) =>
+        ce('div', { key: ri, style: { display: 'flex', flexDirection: 'row', gap: 12 } },
+          r.map((day, ci) => {
+            let bg = 'transparent'
+            if (day !== -1) {
+              const count = dailyCommits[day - 1] || 0
+              const level = count === 0 ? 0 : count <= 2 ? 1 : count <= 5 ? 2 : count <= 10 ? 3 : 4
+              bg = t.heatmap[level]
+            }
+            return ce('div', { key: ci, style: { width: 84, height: 84, borderRadius: 12, background: bg } })
+          })
+        )
+      )
+    )
+  )
+}
+
+function yearlyHeatmap(t: Theme, dailyCommits: number[], year: number) {
+  const CELL = 13
+  const GAP = 3
+  const startOffset = new Date(year, 0, 1).getDay()
+  const cells: { day: number | null }[] = []
+  for (let i = 0; i < startOffset; i++) cells.push({ day: null })
+  for (let i = 0; i < dailyCommits.length; i++) cells.push({ day: i })
+  while (cells.length % 7 !== 0) cells.push({ day: null })
+
+  const weeks: { day: number | null }[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+
+  return ce('div',
+    { style: { display: 'flex', flexDirection: 'column', marginBottom: 48, background: t.cardBg, border: `1px solid ${t.divider}`, borderRadius: CARD_RADIUS, padding: '32px', boxShadow: BOX_SHADOW } },
+    ce('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 } },
+      ce('span', { style: { color: t.subtext, fontSize: 24, letterSpacing: '4px', fontWeight: 700 } }, 'CONTRIBUTION INTENSITY'),
+      ce('span', { style: { color: t.subtext, fontSize: 22, fontWeight: 400, opacity: 0.6 } }, String(year)),
+    ),
+    ce('div', { style: { display: 'flex', flexDirection: 'row', gap: GAP } },
+      weeks.map((week, wi) =>
+        ce('div', { key: wi, style: { display: 'flex', flexDirection: 'column', gap: GAP } },
+          week.map((cell, di) => {
+            let bg = 'transparent'
+            if (cell.day !== null) {
+              const count = dailyCommits[cell.day] ?? 0
+              const level = count === 0 ? 0 : count <= 2 ? 1 : count <= 5 ? 2 : count <= 10 ? 3 : 4
+              bg = t.heatmap[level]
+            }
+            return ce('div', { key: di, style: { width: CELL, height: CELL, borderRadius: 2, background: bg } })
+          })
+        )
+      )
+    )
+  )
+}
+
+function bestMonthStat(t: Theme, bestMonth: number, bestMonthCommits: number) {
+  return ce('div',
+    { style: { display: 'flex', flexDirection: 'column', marginBottom: 48, background: t.cardBg, border: `1px solid ${t.accent}`, borderRadius: CARD_RADIUS, padding: '28px 36px', boxShadow: BOX_SHADOW } },
+    ce('span', { style: { color: t.subtext, fontSize: 20, letterSpacing: '2px', fontWeight: 600, marginBottom: 12 } }, 'BEST MONTH'),
+    ce('div', { style: { display: 'flex', alignItems: 'baseline', gap: 20 } },
+      ce('span', { style: { fontSize: 56, fontWeight: 700, color: t.text, lineHeight: 1 } }, MONTHS[bestMonth - 1]),
+      ce('span', { style: { fontSize: 36, fontWeight: 400, color: t.accent, opacity: 0.8 } }, `${bestMonthCommits} commits`),
+    )
+  )
+}
+
+async function renderPng(element: React.ReactElement, fontData: { regular: Buffer; bold: Buffer; extrabold: Buffer }) {
+  const svg = await satori(element, {
+    width: CARD_W,
+    height: CARD_H,
+    fonts: [
+      { name: 'Inter', data: fontData.regular, weight: 400, style: 'normal' },
+      { name: 'Inter', data: fontData.bold, weight: 700, style: 'normal' },
+      { name: 'Inter', data: fontData.extrabold, weight: 800, style: 'normal' },
+    ],
+  })
+  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: CARD_W } })
+  return new Uint8Array(resvg.render().asPng())
+}
+
+// ─── API Route ─────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const username = searchParams.get('username')?.trim()
@@ -29,7 +235,8 @@ export async function GET(request: NextRequest) {
   const year = parseInt(searchParams.get('year') ?? '0')
   const theme = searchParams.get('theme') ?? 'daylight'
   const mode = searchParams.get('mode') ?? 'monthly'
-  const token = process.env.GITHUB_TOKEN
+  // Accept token via header (never logged in URL) or fall back to server env var
+  const token = request.headers.get('X-GitHub-Token') ?? process.env.GITHUB_TOKEN
 
   if (!username || !year) {
     return NextResponse.json({ error: 'Missing or invalid parameters' }, { status: 400 })
@@ -38,607 +245,69 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing or invalid month' }, { status: 400 })
   }
 
-  const activeTheme = getTheme(theme)
+  const t = getTheme(theme)
+  const rootStyle = {
+    width: CARD_W, height: CARD_H,
+    background: t.bg,
+    display: 'flex', flexDirection: 'column' as const,
+    padding: '90px 80px',
+    fontFamily: 'Inter',
+    position: 'relative' as const,
+  }
 
   try {
-    const [stats, { regular, bold, extrabold }] = await Promise.all([
+    const [stats, fontData] = await Promise.all([
       mode === 'yearly'
         ? fetchYearlyStats(username, year, token)
         : fetchMonthlyStats(username, month, year, token),
       loadFonts(),
     ])
 
-    // Fetch avatar image
     let avatarBuffer: Buffer | null = null
     try {
       const avatarRes = await fetch(stats.avatarUrl)
-      if (avatarRes.ok) {
-        avatarBuffer = Buffer.from(await avatarRes.arrayBuffer())
-      }
+      if (avatarRes.ok) avatarBuffer = Buffer.from(await avatarRes.arrayBuffer())
     } catch (e) {
       console.error('Failed to fetch avatar:', e)
     }
 
+    const pngHeaders = { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+
     if (mode === 'yearly') {
-      const yearlyStats = stats as import('@/lib/github').YearlyStats
-      const { commits, pullRequests, reposContributed, topLanguage, topLanguageColor, topRepo, name: fullName, totalStars, followers, dailyCommits, bestMonth, bestMonthCommits } = yearlyStats
-
-      // Build 52×7 heatmap grid (ISO week layout: week columns, day rows)
-      const jan1 = new Date(year, 0, 1)
-      const startOffset = jan1.getDay() // 0=Sun, pad first week
-      const totalDays = dailyCommits.length
-
-      const cells: { day: number | null }[] = []
-      for (let i = 0; i < startOffset; i++) cells.push({ day: null })
-      for (let i = 0; i < totalDays; i++) cells.push({ day: i })
-      while (cells.length % 7 !== 0) cells.push({ day: null })
-
-      const weeks: { day: number | null }[][] = []
-      for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
-
-      const CELL = 13
-      const GAP = 3
-
-      const yearlyCard = React.createElement(
-        'div',
-        {
-          style: {
-            width: 1080,
-            height: 1920,
-            background: activeTheme.bg,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '90px 80px',
-            fontFamily: 'Inter',
-            position: 'relative',
-          },
-        },
-
-        // Accent bar
-        React.createElement('div', {
-          style: { position: 'absolute', top: 0, left: 0, width: 1080, height: 6, background: activeTheme.accent },
-        }),
-
-        // Top bar
-        React.createElement(
-          'div',
-          { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
-          React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 24, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '4px', opacity: 0.8 } }, 'github wrapped'),
-          React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 24, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '4px', opacity: 0.8 } }, String(year)),
-        ),
-
-        // Spacer
-        React.createElement('div', { style: { flex: 1 } }),
-
-        // User Profile Header
-        React.createElement(
-          'div',
-          { style: { display: 'flex', flexDirection: 'column', marginBottom: 32 } },
-          React.createElement(
-            'div',
-            { style: { display: 'flex', alignItems: 'center', gap: 24 } },
-            avatarBuffer && React.createElement('img', {
-              src: `data:image/png;base64,${avatarBuffer.toString('base64')}`,
-              width: 140,
-              height: 140,
-              style: { borderRadius: 70, border: `3px solid ${activeTheme.accent}`, opacity: 0.9 },
-            } as React.ImgHTMLAttributes<HTMLImageElement>),
-            React.createElement(
-              'div',
-              { style: { display: 'flex', flexDirection: 'column' } },
-              fullName && React.createElement('span', { style: { color: activeTheme.text, fontSize: 64, fontWeight: 700, lineHeight: 1.1 } }, fullName),
-              React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 42, fontWeight: 400, marginTop: 4 } }, `@${yearlyStats.username}`),
-            )
-          )
-        ),
-
-        // Divider
-        React.createElement('div', { style: { height: 1, background: activeTheme.divider, opacity: 0.5, marginBottom: 40 } }),
-
-        // Hero stat — total commits
-        React.createElement(
-          'div',
-          { style: { display: 'flex', flexDirection: 'column', marginBottom: 40, borderLeft: `6px solid ${activeTheme.accent}`, paddingLeft: 32 } },
-          React.createElement('span', { style: { fontSize: 180, fontWeight: 800, color: activeTheme.text, lineHeight: 1, letterSpacing: '-6px' } }, commits.toLocaleString()),
-          React.createElement('span', { style: { color: activeTheme.accent, fontSize: 42, marginTop: 8, fontWeight: 400, opacity: 0.8 } }, 'commits this year'),
-        ),
-
-        // Heatmap — 52-week banner
-        React.createElement(
-          'div',
-          {
-            style: {
-              display: 'flex',
-              flexDirection: 'column',
-              marginBottom: 48,
-              background: activeTheme.cardBg,
-              border: `1px solid ${activeTheme.divider}`,
-              borderRadius: 24,
-              padding: '32px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-            },
-          },
-          React.createElement(
-            'div',
-            { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 } },
-            React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 24, letterSpacing: '4px', fontWeight: 700 } }, 'CONTRIBUTION INTENSITY'),
-            React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 22, fontWeight: 400, opacity: 0.6 } }, `${year}`),
-          ),
-          // Weeks as columns, days as rows
-          React.createElement(
-            'div',
-            { style: { display: 'flex', flexDirection: 'row', gap: GAP } },
-            weeks.map((week, wi) =>
-              React.createElement(
-                'div',
-                { key: wi, style: { display: 'flex', flexDirection: 'column', gap: GAP } },
-                week.map((cell, di) => {
-                  let bg = 'transparent'
-                  if (cell.day !== null) {
-                    const count = dailyCommits[cell.day] ?? 0
-                    const level = count === 0 ? 0 : count <= 2 ? 1 : count <= 5 ? 2 : count <= 10 ? 3 : 4
-                    bg = activeTheme.heatmap[level]
-                  }
-                  return React.createElement('div', {
-                    key: di,
-                    style: { width: CELL, height: CELL, borderRadius: 2, background: bg },
-                  })
-                })
-              )
-            )
-          )
-        ),
-
-        // Best month stat
-        React.createElement(
-          'div',
-          {
-            style: {
-              display: 'flex',
-              flexDirection: 'column',
-              marginBottom: 48,
-              background: activeTheme.cardBg,
-              border: `1px solid ${activeTheme.accent}`,
-              borderRadius: 24,
-              padding: '28px 36px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-            },
-          },
-          React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, letterSpacing: '2px', fontWeight: 600, marginBottom: 12 } }, 'BEST MONTH'),
-          React.createElement(
-            'div',
-            { style: { display: 'flex', alignItems: 'baseline', gap: 20 } },
-            React.createElement('span', { style: { fontSize: 56, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, MONTHS[bestMonth - 1]),
-            React.createElement('span', { style: { fontSize: 36, fontWeight: 400, color: activeTheme.accent, opacity: 0.8 } }, `${bestMonthCommits} commits`),
-          )
-        ),
-
-        // Secondary stats 4-column row
-        React.createElement(
-          'div',
-          { style: { display: 'flex', gap: 16, marginBottom: 48, width: '100%' } },
-          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '20px 24px' } },
-            React.createElement('span', { style: { fontSize: 48, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, String(pullRequests)),
-            React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, marginTop: 8 } }, 'pull requests')
-          ),
-          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '20px 24px' } },
-            React.createElement('span', { style: { fontSize: 48, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, String(reposContributed)),
-            React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, marginTop: 8 } }, 'repos')
-          ),
-          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '20px 24px' } },
-            React.createElement('span', { style: { fontSize: 48, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, totalStars > 999 ? `${(totalStars / 1000).toFixed(1)}k` : String(totalStars)),
-            React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, marginTop: 8 } }, 'total stars')
-          ),
-          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '20px 24px' } },
-            React.createElement('span', { style: { fontSize: 48, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, followers > 999 ? `${(followers / 1000).toFixed(1)}k` : String(followers)),
-            React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, marginTop: 8 } }, 'followers')
-          ),
-        ),
-
-        // Bottom row (Language & Repo)
-        React.createElement(
-          'div',
-          { style: { display: 'flex', gap: 16, width: '100%' } },
-          topLanguage
-            ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '32px 36px', flex: 1 } },
-              React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, letterSpacing: '2px', fontWeight: 600, marginBottom: 16 } }, 'TOP LANGUAGE'),
-              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 16 } },
-                React.createElement('div', { style: { width: 24, height: 24, borderRadius: '50%', background: topLanguageColor ?? activeTheme.accent, flexShrink: 0 } }),
-                React.createElement('span', { style: { fontSize: 44, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, topLanguage),
-              )
-            )
-            : React.createElement('div', { style: { flex: 1 } }),
-          topRepo
-            ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '32px 36px', flex: 1 } },
-              React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, letterSpacing: '2px', fontWeight: 600, marginBottom: 16 } }, 'TOP REPO'),
-              React.createElement('span', { style: { fontSize: 36, fontWeight: 700, color: activeTheme.text, lineHeight: 1.1 } }, topRepo.length > 20 ? topRepo.slice(0, 18) + '...' : topRepo)
-            )
-            : React.createElement('div', { style: { flex: 1 } }),
-        ),
-
-        React.createElement('div', { style: { flex: 1 } }),
-
-        // Footer
-        React.createElement(
-          'div',
-          { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-          React.createElement('span', { style: { color: activeTheme.subtext, opacity: 0.5, fontSize: 24, fontWeight: 400 } }, `github.com/${yearlyStats.username}`),
-          React.createElement('span', { style: { color: activeTheme.subtext, opacity: 0.5, fontSize: 24, fontWeight: 400 } }, 'github wrapped'),
-        ),
+      const { commits, pullRequests, reposContributed, topLanguage, topLanguageColor, topRepo, name: fullName, totalStars, followers, dailyCommits, bestMonth, bestMonthCommits, username: uname } = stats as import('@/lib/github').YearlyStats
+      const card = ce('div', { style: rootStyle },
+        accentBar(t),
+        topBar(t, String(year)),
+        ce('div', { style: { flex: 1 } }),
+        userHeader(t, avatarBuffer, fullName, uname),
+        dividerEl(t),
+        heroStat(t, commits, 'commits this year'),
+        yearlyHeatmap(t, dailyCommits, year),
+        bestMonthStat(t, bestMonth, bestMonthCommits),
+        statsGrid(t, pullRequests, reposContributed, totalStars, followers),
+        bottomRow(t, topLanguage, topLanguageColor, topRepo),
+        ce('div', { style: { flex: 1 } }),
+        cardFooter(t, uname),
       )
-
-      const svg = await satori(yearlyCard, {
-        width: 1080,
-        height: 1920,
-        fonts: [
-          { name: 'Inter', data: regular, weight: 400, style: 'normal' },
-          { name: 'Inter', data: bold, weight: 700, style: 'normal' },
-          { name: 'Inter', data: extrabold, weight: 800, style: 'normal' },
-        ],
-      })
-      const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1080 } })
-      const png = new Uint8Array(resvg.render().asPng())
-      return new NextResponse(png, {
-        headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache, no-store, must-revalidate' },
-      })
+      return new NextResponse(await renderPng(card, fontData), { headers: pngHeaders })
     }
 
-    // --- Monthly card ---
-    const monthlyStats = stats as import('@/lib/github').MonthlyStats
-    const monthName = MONTHS[month - 1].toUpperCase()
-    // Scale font size to fit the month name — short months get HUGE text
-    const monthFontSize = Math.max(100, Math.min(220, Math.floor(1050 / monthName.length)))
-
-    const { commits, pullRequests, reposContributed, topLanguage, topLanguageColor, topRepo, name: fullName, totalStars, followers, dailyCommits } = monthlyStats
-
-    const card = React.createElement(
-      'div',
-      {
-        style: {
-          width: 1080,
-          height: 1920,
-          background: activeTheme.bg,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '90px 80px',
-          fontFamily: 'Inter',
-          position: 'relative',
-        },
-      },
-
-      // Accent bar at top
-      React.createElement('div', {
-        style: {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: 1080,
-          height: 6,
-          background: activeTheme.accent,
-        },
-      }),
-
-      // Top bar
-      React.createElement(
-        'div',
-        {
-          style: {
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 10,
-          }
-        },
-        React.createElement('span', {
-          style: {
-            color: activeTheme.subtext,
-            fontSize: 24,
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '4px',
-            opacity: 0.8,
-          }
-        }, 'github wrapped'),
-        React.createElement('span', {
-          style: {
-            color: activeTheme.subtext,
-            fontSize: 24,
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '4px',
-            opacity: 0.8,
-          }
-        }, `${MONTHS[month - 1]} ${year}`),
-      ),
-
-      // Spacer
-      React.createElement('div', { style: { flex: 1 } }),
-
-      // User Profile Header
-      React.createElement(
-        'div',
-        { style: { display: 'flex', flexDirection: 'column', marginBottom: 32 } },
-        React.createElement(
-          'div',
-          { style: { display: 'flex', alignItems: 'center', gap: 24 } },
-          avatarBuffer && React.createElement('img', {
-            src: `data:image/png;base64,${avatarBuffer.toString('base64')}`,
-            width: 140,
-            height: 140,
-            style: {
-              borderRadius: 70,
-              border: `3px solid ${activeTheme.accent}`,
-              opacity: 0.9,
-            }
-          } as React.ImgHTMLAttributes<HTMLImageElement>),
-          React.createElement(
-            'div',
-            { style: { display: 'flex', flexDirection: 'column' } },
-            fullName && React.createElement(
-              'span',
-              { style: { color: activeTheme.text, fontSize: 64, fontWeight: 700, lineHeight: 1.1 } },
-              fullName
-            ),
-            React.createElement(
-              'span',
-              { style: { color: activeTheme.subtext, fontSize: 42, fontWeight: 400, marginTop: 4 } },
-              `@${monthlyStats.username}`
-            ),
-          )
-        )
-      ),
-
-      // Divider
-      React.createElement('div', { style: { height: 1, background: activeTheme.divider, opacity: 0.5, marginBottom: 40 } }),
-
-      // Commits — the hero stat
-      React.createElement(
-        'div',
-        {
-          style: {
-            display: 'flex',
-            flexDirection: 'column',
-            marginBottom: 40,
-            borderLeft: `6px solid ${activeTheme.accent}`,
-            paddingLeft: 32,
-          },
-        },
-        React.createElement(
-          'span',
-          {
-            style: {
-              fontSize: 180,
-              fontWeight: 800,
-              color: activeTheme.text,
-              lineHeight: 1,
-              letterSpacing: '-6px',
-            },
-          },
-          commits.toLocaleString(),
-        ),
-        React.createElement(
-          'span',
-          { style: { color: activeTheme.accent, fontSize: 42, marginTop: 8, fontWeight: 400, opacity: 0.8 } },
-          'commits this month',
-        ),
-      ),
-
-      // Secondary stats 4-column row
-      React.createElement(
-        'div',
-        { style: { display: 'flex', gap: 16, marginBottom: 48, width: '100%' } },
-        // PRs
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' } },
-          React.createElement('span', { style: { fontSize: 48, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, String(pullRequests)),
-          React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, marginTop: 8, fontWeight: 400 } }, 'pull requests')
-        ),
-        // Repos
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' } },
-          React.createElement('span', { style: { fontSize: 48, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, String(reposContributed)),
-          React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, marginTop: 8, fontWeight: 400 } }, 'repos')
-        ),
-        // Stars
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' } },
-          React.createElement('span', { style: { fontSize: 48, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, totalStars > 999 ? `${(totalStars / 1000).toFixed(1)}k` : String(totalStars)),
-          React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, marginTop: 8, fontWeight: 400 } }, 'total stars')
-        ),
-        // Followers
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, background: activeTheme.cardBg, border: `1px solid ${activeTheme.divider}`, borderRadius: 24, padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' } },
-          React.createElement('span', { style: { fontSize: 48, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, followers > 999 ? `${(followers / 1000).toFixed(1)}k` : String(followers)),
-          React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, marginTop: 8, fontWeight: 400 } }, 'followers')
-        )
-      ),
-
-      // HeatMap Section (7x5 Grid layout)
-      (() => {
-        const firstDay = new Date(year, month - 1, 1).getDay(); // 0-6 (Sun-Sat)
-        const daysInMonth = dailyCommits.length;
-
-        // We want rows (weeks), each with 7 columns (days, Sun-Sat).
-        const rows = [];
-        let currentRow = [];
-
-        // Pad the first week
-        for (let i = 0; i < firstDay; i++) {
-          currentRow.push(-1);
-        }
-
-        // Fill in days
-        for (let d = 1; d <= daysInMonth; d++) {
-          currentRow.push(d);
-          if (currentRow.length === 7) {
-            rows.push(currentRow);
-            currentRow = [];
-          }
-        }
-
-        // Pad the last week
-        if (currentRow.length > 0) {
-          while (currentRow.length < 7) {
-            currentRow.push(-1);
-          }
-          rows.push(currentRow);
-        }
-
-        return React.createElement(
-          'div',
-          {
-            style: {
-              display: 'flex',
-              flexDirection: 'column',
-              marginBottom: 48,
-              background: activeTheme.cardBg,
-              border: `1px solid ${activeTheme.divider}`,
-              borderRadius: 24,
-              padding: '32px',
-              alignItems: 'center',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-            },
-          },
-          React.createElement(
-            'div', { style: { width: '100%', display: 'flex' } },
-            React.createElement(
-              'span',
-              { style: { color: activeTheme.subtext, fontSize: 24, letterSpacing: '4px', fontWeight: 700, marginBottom: 36 } },
-              'CONTRIBUTION INTENSITY'
-            )
-          ),
-          React.createElement(
-            'div',
-            {
-              // Container for the weeks. Flex column to stack weeks vertically.
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-              },
-            },
-            rows.map((row, rowIndex) =>
-              React.createElement(
-                'div',
-                {
-                  key: rowIndex,
-                  style: {
-                    display: 'flex',
-                    flexDirection: 'row', // 7 boxes laid out horizontally per week
-                    gap: 12,
-                  }
-                },
-                row.map((day, colIndex) => {
-                  let bg = 'transparent';
-                  if (day !== -1) {
-                    const count = dailyCommits[day - 1] || 0;
-                    const level = count === 0 ? 0 : count <= 2 ? 1 : count <= 5 ? 2 : count <= 10 ? 3 : 4;
-                    bg = activeTheme.heatmap[level];
-                  }
-
-                  return React.createElement('div', {
-                    key: colIndex,
-                    style: {
-                      width: 84, // Reduced from 104
-                      height: 84,
-                      borderRadius: 12,
-                      background: bg,
-                    }
-                  });
-                })
-              )
-            )
-          )
-        );
-      })(),
-
-      // Bottom row (Language & Repo)
-      React.createElement(
-        'div',
-        { style: { display: 'flex', gap: 16, width: '100%' } },
-        topLanguage
-          ? React.createElement(
-            'div',
-            {
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                background: activeTheme.cardBg,
-                border: `1px solid ${activeTheme.divider}`,
-                borderRadius: 24,
-                padding: '32px 36px',
-                flex: 1,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-              },
-            },
-            React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, letterSpacing: '2px', fontWeight: 600, marginBottom: 16 } }, 'TOP LANGUAGE'),
-            React.createElement(
-              'div',
-              { style: { display: 'flex', alignItems: 'center', gap: 16 } },
-              React.createElement('div', {
-                style: { width: 24, height: 24, borderRadius: '50%', background: topLanguageColor ?? activeTheme.accent, flexShrink: 0 },
-              }),
-              React.createElement('span', { style: { fontSize: 44, fontWeight: 700, color: activeTheme.text, lineHeight: 1 } }, topLanguage),
-            )
-          )
-          : React.createElement('div', { style: { flex: 1 } }),
-
-        topRepo
-          ? React.createElement(
-            'div',
-            {
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                background: activeTheme.cardBg,
-                border: `1px solid ${activeTheme.divider}`,
-                borderRadius: 24,
-                padding: '32px 36px',
-                flex: 1,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-              },
-            },
-            React.createElement('span', { style: { color: activeTheme.subtext, fontSize: 20, letterSpacing: '2px', fontWeight: 600, marginBottom: 16 } }, 'TOP REPO'),
-            React.createElement('span', { style: { fontSize: 36, fontWeight: 700, color: activeTheme.text, lineHeight: 1.1 } }, topRepo.length > 20 ? topRepo.slice(0, 18) + '...' : topRepo)
-          )
-          : React.createElement('div', { style: { flex: 1 } }),
-      ),
-
-      // Push footer to bottom
-      React.createElement('div', { style: { flex: 1 } }),
-
-      // Footer
-      React.createElement(
-        'div',
-        { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-        React.createElement(
-          'span',
-          { style: { color: activeTheme.subtext, opacity: 0.5, fontSize: 24, fontWeight: 400 } },
-          `github.com/${monthlyStats.username}`,
-        ),
-        React.createElement(
-          'span',
-          { style: { color: activeTheme.subtext, opacity: 0.5, fontSize: 24, fontWeight: 400 } },
-          'github wrapped',
-        ),
-      ),
+    // Monthly card
+    const { commits, pullRequests, reposContributed, topLanguage, topLanguageColor, topRepo, name: fullName, totalStars, followers, dailyCommits, username: uname } = stats as import('@/lib/github').MonthlyStats
+    const card = ce('div', { style: rootStyle },
+      accentBar(t),
+      topBar(t, `${MONTHS[month - 1]} ${year}`),
+      ce('div', { style: { flex: 1 } }),
+      userHeader(t, avatarBuffer, fullName, uname),
+      dividerEl(t),
+      heroStat(t, commits, 'commits this month'),
+      statsGrid(t, pullRequests, reposContributed, totalStars, followers),
+      monthlyHeatmap(t, dailyCommits, year, month),
+      bottomRow(t, topLanguage, topLanguageColor, topRepo),
+      ce('div', { style: { flex: 1 } }),
+      cardFooter(t, uname),
     )
-
-    const svg = await satori(card, {
-      width: 1080,
-      height: 1920,
-      fonts: [
-        { name: 'Inter', data: regular, weight: 400, style: 'normal' },
-        { name: 'Inter', data: bold, weight: 700, style: 'normal' },
-        { name: 'Inter', data: extrabold, weight: 800, style: 'normal' },
-      ],
-    })
-
-    const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1080 } })
-    const png = new Uint8Array(resvg.render().asPng())
-
-    return new NextResponse(png, {
-      headers: {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-      },
-    })
+    return new NextResponse(await renderPng(card, fontData), { headers: pngHeaders })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to generate card'
     return NextResponse.json({ error: message }, { status: 500 })

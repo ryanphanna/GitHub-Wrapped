@@ -11,7 +11,7 @@
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "next": "16.1.6",
-    "react": "19.2.3",
+    "react": "19.2.6",
     "react-dom": "19.2.3",
     "satori": "^0.19.2"
   },

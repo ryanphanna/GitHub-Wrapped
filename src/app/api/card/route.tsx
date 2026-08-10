@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { readFile } from 'fs/promises'
 import path from 'path'
-import { fetchMonthlyStats, fetchYearlyStats } from '@/lib/github'
+import { fetchMonthlyStats, fetchYearlyStats, isValidGitHubUsername } from '@/lib/github'
 import { renderCard } from '@/lib/card-renderer'
 
 let fonts: { regular: Buffer; bold: Buffer; extrabold: Buffer } | null = null
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   const mode = searchParams.get('mode') ?? 'monthly'
   const token = process.env.GITHUB_TOKEN
 
-  if (!username || !year) {
+  if (!username || !isValidGitHubUsername(username) || !year) {
     return NextResponse.json({ error: 'Missing or invalid parameters' }, { status: 400 })
   }
   if (mode === 'monthly' && (!month || month < 1 || month > 12)) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { startTransition, useState, useEffect } from 'react'
 import { MONTHS, THEMES } from '@/lib/themes'
 
 const now = new Date()
@@ -33,11 +33,13 @@ export default function Home() {
     const mo = params.get('month')
     const y = params.get('year')
     const th = params.get('theme')
-    if (u) setUsername(u)
-    if (m === 'yearly' || m === 'monthly') setMode(m)
-    if (mo) setMonth(Number(mo))
-    if (y) setYear(Number(y))
-    if (th) setTheme(th)
+    startTransition(() => {
+      if (u) setUsername(u)
+      if (m === 'yearly' || m === 'monthly') setMode(m)
+      if (mo) setMonth(Number(mo))
+      if (y) setYear(Number(y))
+      if (th) setTheme(th)
+    })
   }, [])
 
   const cardApiUrl = typeof window !== 'undefined'

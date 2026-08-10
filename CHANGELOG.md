@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - **Perf**: Added a 1-hour in-memory cache for `fetchYearlyStats` results (`yearlyStatsCache`, keyed by `${username}-${year}`). Previously, a second yearly card request would re-aggregate all 12 months from scratch even though each monthly fetch was individually cached.
 
 ### Fixed
+- **Security**: Validate GitHub usernames and construct API URLs from the fixed GitHub origin, preventing user input from reaching arbitrary request targets.
 - **GitHub API Rate Limits**: Added an exponential backoff retry wrapper (`ghFetchWithBackoff`) that retries up to 3 times on 429/403 responses, honouring the `retry-after` header when present and doubling the delay (starting at 1 s) otherwise.
 - **Timezone-aware Commit Bucketing**: `fetchMonthlyStats` now accepts an optional `timezone` parameter (IANA string, defaults to `'UTC'`). Daily commit bucketing uses `Intl.DateTimeFormat` to resolve each UTC timestamp to the correct local date before incrementing the heatmap bucket.
 

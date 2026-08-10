@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.5.1] - 2026-08-09
 
 ### Changed
 - **Refactor**: Moved `LANGUAGE_COLORS` out of `github.ts` into `src/lib/language-colors.json` and import it, eliminating the hardcoded inline object.

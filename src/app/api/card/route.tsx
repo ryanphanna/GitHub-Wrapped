@@ -4,7 +4,7 @@ import satori from 'satori'
 import { Resvg } from '@resvg/resvg-js'
 import { readFile } from 'fs/promises'
 import path from 'path'
-import { fetchMonthlyStats, fetchYearlyStats } from '@/lib/github'
+import { fetchMonthlyStats, fetchYearlyStats, isValidGitHubUsername } from '@/lib/github'
 import { MONTHS, getTheme, Theme } from '@/lib/themes'
 import React from 'react'
 
@@ -238,7 +238,7 @@ export async function GET(request: NextRequest) {
   // Accept token via header (never logged in URL) or fall back to server env var
   const token = request.headers.get('X-GitHub-Token') ?? process.env.GITHUB_TOKEN
 
-  if (!username || !year) {
+  if (!username || !isValidGitHubUsername(username) || !year) {
     return NextResponse.json({ error: 'Missing or invalid parameters' }, { status: 400 })
   }
   if (mode === 'monthly' && (!month || month < 1 || month > 12)) {

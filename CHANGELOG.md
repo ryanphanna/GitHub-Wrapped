@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Security**: Validate GitHub usernames and construct API URLs from the fixed GitHub origin, preventing user input from reaching arbitrary request targets.
+
 ## [1.5.0] - 2026-03-09
 
 ### Added

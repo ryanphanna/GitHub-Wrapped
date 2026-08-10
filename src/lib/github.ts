@@ -4,6 +4,30 @@ import type { MonthlyStats, YearlyStats } from '@/lib/types'
 export type { MonthlyStats, YearlyStats }
 
 const GITHUB_API = 'https://api.github.com'
+const GITHUB_USERNAME_PATTERN = /^[a-z\d](?:[a-z\d-]{0,38})$/i
+
+export function isValidGitHubUsername(username: string): boolean {
+  return GITHUB_USERNAME_PATTERN.test(username)
+}
+
+function normalizeGitHubUsername(username: string): string {
+  const normalized = username.trim()
+  if (!isValidGitHubUsername(normalized)) {
+    throw new Error('Invalid GitHub username')
+  }
+  return normalized
+}
+
+function githubUrl(pathname: string, params?: Record<string, string>): URL {
+  const url = new URL(pathname, GITHUB_API)
+  if (url.origin !== GITHUB_API) {
+    throw new Error('Invalid GitHub API URL')
+  }
+  for (const [key, value] of Object.entries(params ?? {})) {
+    url.searchParams.set(key, value)
+  }
+  return url
+}
 
 function dateRange(month: number, year: number) {
   const from = `${year}-${String(month).padStart(2, '0')}-01`
@@ -12,7 +36,7 @@ function dateRange(month: number, year: number) {
   return { from, to }
 }
 
-async function ghFetch(url: string, token?: string, extraInit?: RequestInit) {
+async function ghFetch(url: URL, token?: string, extraInit?: RequestInit) {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     'User-Agent': 'github-wrapped-app',
@@ -29,10 +53,12 @@ export async function fetchMonthlyStats(
   year: number,
   token?: string
 ): Promise<MonthlyStats> {
+  const safeUsername = normalizeGitHubUsername(username)
+  const encodedUsername = encodeURIComponent(safeUsername)
   const { from, to } = dateRange(month, year)
 
   // Fetch user profile
-  const userRes = await ghFetch(`${GITHUB_API}/users/${username}`, token, { cache: 'no-store' })
+  const userRes = await ghFetch(githubUrl(`/users/${encodedUsername}`), token, { cache: 'no-store' })
   if (!userRes.ok) {
     if (userRes.status === 404) throw new Error(`GitHub user "${username}" not found`)
     if (userRes.status === 403) throw new Error('GitHub API rate limit reached — add a GitHub token to increase your limit')
@@ -48,19 +74,24 @@ export async function fetchMonthlyStats(
   if (token) commitSearchHeaders['Authorization'] = `Bearer ${token}`
 
   const [commitsRes, prsRes, commitsDetailRes, reposRes] = await Promise.all([
-    fetch(
-      `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=1`,
-      { headers: commitSearchHeaders, cache: 'no-store' }
-    ),
-    ghFetch(
-      `${GITHUB_API}/search/issues?q=author:${username}+type:pr+created:${from}..${to}&per_page=1`,
-      token
-    ),
-    fetch(
-      `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=100&sort=author-date&order=desc`,
-      { headers: commitSearchHeaders, cache: 'no-store' }
-    ),
-    ghFetch(`${GITHUB_API}/users/${username}/repos?per_page=100&sort=updated`, token, { cache: 'no-store' })
+    fetch(githubUrl('/search/commits', {
+      q: `author:${safeUsername} committer-date:${from}..${to}`,
+      per_page: '1',
+    }), { headers: commitSearchHeaders, cache: 'no-store' }),
+    ghFetch(githubUrl('/search/issues', {
+      q: `author:${safeUsername} type:pr created:${from}..${to}`,
+      per_page: '1',
+    }), token),
+    fetch(githubUrl('/search/commits', {
+      q: `author:${safeUsername} committer-date:${from}..${to}`,
+      per_page: '100',
+      sort: 'author-date',
+      order: 'desc',
+    }), { headers: commitSearchHeaders, cache: 'no-store' }),
+    ghFetch(githubUrl(`/users/${encodedUsername}/repos`, {
+      per_page: '100',
+      sort: 'updated',
+    }), token, { cache: 'no-store' })
   ])
 
   const [commitsDataBody, prsDataBody, commitsDetailBody, reposData] = await Promise.all([
@@ -91,10 +122,13 @@ export async function fetchMonthlyStats(
     const fetchPromises = [];
     for (let p = 2; p <= pagesToFetch; p++) {
       fetchPromises.push(
-        fetch(
-          `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=100&page=${p}&sort=author-date&order=desc`,
-          { headers: commitSearchHeaders, cache: 'no-store' }
-        ).then(res => res.json())
+        fetch(githubUrl('/search/commits', {
+          q: `author:${safeUsername} committer-date:${from}..${to}`,
+          per_page: '100',
+          page: String(p),
+          sort: 'author-date',
+          order: 'desc',
+        }), { headers: commitSearchHeaders, cache: 'no-store' }).then(res => res.json())
       );
     }
     const extraPages = await Promise.all(fetchPromises);
@@ -140,13 +174,20 @@ export async function fetchMonthlyStats(
   let topLanguageColor: string | null = null
 
   if (topRepoFullName) {
-    const langRes = await ghFetch(`${GITHUB_API}/repos/${topRepoFullName}/languages`, token, { cache: 'no-store' })
-    if (langRes.ok) {
-      const langs = await langRes.json()
-      const top = (Object.entries(langs) as [string, number][]).sort(([, a], [, b]) => b - a)[0]
-      if (top) {
-        topLanguage = top[0]
-        topLanguageColor = LANGUAGE_COLORS[topLanguage] ?? '#6e7681'
+    const [owner, repo] = topRepoFullName.split('/')
+    if (owner && repo && isValidGitHubUsername(owner) && /^[a-zA-Z0-9_.-]+$/.test(repo)) {
+      const langRes = await ghFetch(
+        githubUrl(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/languages`),
+        token,
+        { cache: 'no-store' }
+      )
+      if (langRes.ok) {
+        const langs = await langRes.json()
+        const top = (Object.entries(langs) as [string, number][]).sort(([, a], [, b]) => b - a)[0]
+        if (top) {
+          topLanguage = top[0]
+          topLanguageColor = LANGUAGE_COLORS[topLanguage] ?? '#6e7681'
+        }
       }
     }
   }

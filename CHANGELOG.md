@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **Refactor**: Moved `LANGUAGE_COLORS` out of `github.ts` into `src/lib/language-colors.json` and import it, eliminating the hardcoded inline object.
+- **Refactor**: Separated Satori card rendering into a standalone `renderCard` function in `src/lib/card-renderer.tsx`. The route handler now calls `fetchMonthlyStats` / `fetchYearlyStats` then delegates all template JSX and PNG rendering to `renderCard`, making the card design independently testable.
+
+### Performance
+- **Perf**: Added a 1-hour in-memory cache for `fetchMonthlyStats` results. A module-level `Map` keyed by `${username}-${year}-${month}` stores responses; repeated requests within the TTL window skip all GitHub API calls and return the cached `MonthlyStats` immediately.
+- **Perf**: Added a 1-hour in-memory cache for `fetchYearlyStats` results (`yearlyStatsCache`, keyed by `${username}-${year}`). Previously, a second yearly card request would re-aggregate all 12 months from scratch even though each monthly fetch was individually cached.
+
+### Fixed
+- **GitHub API Rate Limits**: Added an exponential backoff retry wrapper (`ghFetchWithBackoff`) that retries up to 3 times on 429/403 responses, honouring the `retry-after` header when present and doubling the delay (starting at 1 s) otherwise.
+- **Timezone-aware Commit Bucketing**: `fetchMonthlyStats` now accepts an optional `timezone` parameter (IANA string, defaults to `'UTC'`). Daily commit bucketing uses `Intl.DateTimeFormat` to resolve each UTC timestamp to the correct local date before incrementing the heatmap bucket.
+
 ## [1.5.0] - 2026-03-09
 
 ### Added

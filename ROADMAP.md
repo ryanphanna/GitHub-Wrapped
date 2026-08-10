@@ -1,6 +1,6 @@
 # Roadmap
 
-This document outlines the future vision and feature roadmap for the GitHub Wrapped application.
+GitHub Wrapped is a shareable monthly stats card for your GitHub activity — commits, pull requests, top language, and top repo, rendered as a downloadable PNG. This roadmap outlines our path from a simple card generator to a persistent, personalized developer dashboard.
 
 ## Features
 

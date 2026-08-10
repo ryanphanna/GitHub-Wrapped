@@ -1,9 +1,20 @@
 import { MONTHS } from '@/lib/themes'
 import type { MonthlyStats, YearlyStats } from '@/lib/types'
+import LANGUAGE_COLORS_JSON from '@/lib/language-colors.json'
+
+const LANGUAGE_COLORS: Record<string, string> = LANGUAGE_COLORS_JSON
 
 export type { MonthlyStats, YearlyStats }
 
 const GITHUB_API = 'https://api.github.com'
+
+// In-memory cache for monthly and yearly stats. Module-level state persists
+// between requests on the same Next.js server instance.
+const MONTHLY_STATS_TTL = 60 * 60 * 1000 // 1 hour in ms
+const monthlyStatsCache = new Map<string, { data: MonthlyStats; cachedAt: number }>()
+
+const YEARLY_STATS_TTL = 60 * 60 * 1000 // 1 hour in ms
+const yearlyStatsCache = new Map<string, { data: YearlyStats; cachedAt: number }>()
 
 function dateRange(month: number, year: number) {
   const from = `${year}-${String(month).padStart(2, '0')}-01`
@@ -23,16 +34,43 @@ async function ghFetch(url: string, token?: string, extraInit?: RequestInit) {
   return res
 }
 
+async function ghFetchWithBackoff(
+  url: string,
+  token?: string,
+  extraInit?: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  let delay = 1000
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await ghFetch(url, token, extraInit)
+    if (res.status !== 429 && res.status !== 403) return res
+    if (attempt === maxRetries) return res
+    const retryAfter = res.headers.get('retry-after')
+    const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay
+    await new Promise(resolve => setTimeout(resolve, waitMs))
+    delay *= 2
+  }
+  // unreachable, but satisfies TypeScript
+  return ghFetch(url, token, extraInit)
+}
+
 export async function fetchMonthlyStats(
   username: string,
   month: number,
   year: number,
-  token?: string
+  token?: string,
+  timezone = 'UTC'
 ): Promise<MonthlyStats> {
+  const cacheKey = `${username}-${year}-${month}`
+  const cached = monthlyStatsCache.get(cacheKey)
+  if (cached && Date.now() - cached.cachedAt < MONTHLY_STATS_TTL) {
+    return cached.data
+  }
+
   const { from, to } = dateRange(month, year)
 
   // Fetch user profile
-  const userRes = await ghFetch(`${GITHUB_API}/users/${username}`, token, { cache: 'no-store' })
+  const userRes = await ghFetchWithBackoff(`${GITHUB_API}/users/${username}`, token, { cache: 'no-store' })
   if (!userRes.ok) {
     if (userRes.status === 404) throw new Error(`GitHub user "${username}" not found`)
     if (userRes.status === 403) throw new Error('GitHub API rate limit reached — add a GitHub token to increase your limit')
@@ -52,7 +90,7 @@ export async function fetchMonthlyStats(
       `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=1`,
       { headers: commitSearchHeaders, cache: 'no-store' }
     ),
-    ghFetch(
+    ghFetchWithBackoff(
       `${GITHUB_API}/search/issues?q=author:${username}+type:pr+created:${from}..${to}&per_page=1`,
       token
     ),
@@ -60,7 +98,7 @@ export async function fetchMonthlyStats(
       `${GITHUB_API}/search/commits?q=author:${username}+committer-date:${from}..${to}&per_page=100&sort=author-date&order=desc`,
       { headers: commitSearchHeaders, cache: 'no-store' }
     ),
-    ghFetch(`${GITHUB_API}/users/${username}/repos?per_page=100&sort=updated`, token, { cache: 'no-store' })
+    ghFetchWithBackoff(`${GITHUB_API}/users/${username}/repos?per_page=100&sort=updated`, token, { cache: 'no-store' })
   ])
 
   const [commitsDataBody, prsDataBody, commitsDetailBody, reposData] = await Promise.all([
@@ -109,11 +147,19 @@ export async function fetchMonthlyStats(
     const dateStr = item.commit?.author?.date
     if (dateStr) {
       const d = new Date(dateStr)
-      // Check if it falls within the requested month/year
-      if (d.getMonth() + 1 === month && d.getFullYear() === year) {
-        const day = d.getDate()
-        if (day >= 1 && day <= lastDay) {
-          dailyCommits[day - 1]++
+      // Convert the UTC instant to the requested timezone to get the local date
+      const localParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(d)
+      const localYear = parseInt(localParts.find(p => p.type === 'year')!.value, 10)
+      const localMonth = parseInt(localParts.find(p => p.type === 'month')!.value, 10)
+      const localDay = parseInt(localParts.find(p => p.type === 'day')!.value, 10)
+      if (localMonth === month && localYear === year) {
+        if (localDay >= 1 && localDay <= lastDay) {
+          dailyCommits[localDay - 1]++
         }
       }
     }
@@ -140,7 +186,7 @@ export async function fetchMonthlyStats(
   let topLanguageColor: string | null = null
 
   if (topRepoFullName) {
-    const langRes = await ghFetch(`${GITHUB_API}/repos/${topRepoFullName}/languages`, token, { cache: 'no-store' })
+    const langRes = await ghFetchWithBackoff(`${GITHUB_API}/repos/${topRepoFullName}/languages`, token, { cache: 'no-store' })
     if (langRes.ok) {
       const langs = await langRes.json()
       const top = (Object.entries(langs) as [string, number][]).sort(([, a], [, b]) => b - a)[0]
@@ -155,7 +201,7 @@ export async function fetchMonthlyStats(
     throw new Error(`No GitHub activity found for ${username} in ${MONTHS[month - 1]} ${year}`)
   }
 
-  return {
+  const result: MonthlyStats = {
     username: user.login,
     avatarUrl: user.avatar_url,
     name: user.name ?? user.login,
@@ -171,6 +217,9 @@ export async function fetchMonthlyStats(
     totalStars,
     dailyCommits,
   }
+
+  monthlyStatsCache.set(cacheKey, { data: result, cachedAt: Date.now() })
+  return result
 }
 
 export async function fetchYearlyStats(
@@ -178,6 +227,12 @@ export async function fetchYearlyStats(
   year: number,
   token?: string
 ): Promise<YearlyStats> {
+  const cacheKey = `${username}-${year}`
+  const cached = yearlyStatsCache.get(cacheKey)
+  if (cached && Date.now() - cached.cachedAt < YEARLY_STATS_TTL) {
+    return cached.data
+  }
+
   const months = await Promise.all(
     Array.from({ length: 12 }, (_, i) =>
       fetchMonthlyStats(username, i + 1, year, token).catch(() => null)
@@ -233,7 +288,7 @@ export async function fetchYearlyStats(
     }
   }
 
-  return {
+  const result: YearlyStats = {
     username: first.username,
     avatarUrl: first.avatarUrl,
     name: first.name,
@@ -250,32 +305,9 @@ export async function fetchYearlyStats(
     bestMonth,
     bestMonthCommits,
   }
+
+  yearlyStatsCache.set(cacheKey, { data: result, cachedAt: Date.now() })
+  return result
 }
 
-export const LANGUAGE_COLORS: Record<string, string> = {
-  TypeScript: '#3178c6',
-  JavaScript: '#f1e05a',
-  Python: '#3572A5',
-  Rust: '#dea584',
-  Go: '#00ADD8',
-  Java: '#b07219',
-  'C++': '#f34b7d',
-  C: '#555555',
-  'C#': '#178600',
-  Ruby: '#701516',
-  Swift: '#F05138',
-  Kotlin: '#A97BFF',
-  PHP: '#4F5D95',
-  HTML: '#e34c26',
-  CSS: '#563d7c',
-  Shell: '#89e051',
-  Vue: '#41b883',
-  Svelte: '#ff3e00',
-  Dart: '#00B4AB',
-  Elixir: '#6e4a7e',
-  Haskell: '#5e5086',
-  Scala: '#c22d40',
-  Lua: '#000080',
-  R: '#198CE7',
-  Zig: '#ec915c',
-}
+export { LANGUAGE_COLORS }

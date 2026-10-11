@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Security
+- **Dependencies**: Updated Next.js and image/compression libraries to patched versions, closing a critical remote-code-execution flaw in card image generation.
 - **Dependencies**: Fixed 3 Dependabot alerts (1 high, 2 moderate) in transitive deps (`nanoid`, `fflate`, `@humanfs/node`) via `npm audit fix`.
 
 ## [1.5.1] - 2026-08-09
